@@ -49,7 +49,7 @@ export const fetchDocumentContent = async (
 ): Promise<ArrayBuffer> => {
   try {
     const response = await axios.get(
-      `https://cloud-api.yandex.net/v1/disk/resources/download?path=${encodeURIComponent(
+      `https://cors-anywhere.herokuapp.com/https://cloud-api.yandex.net/v1/disk/resources/download?path=${encodeURIComponent(
         path
       )}`,
       {
