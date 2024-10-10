@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { fetchFiles, getCookie, YandexDiskFile } from "../../api/yandexApi";
 import { useNavigate } from "react-router-dom";
 import Loader from "../../components/Loader/loader";
-import "../styles/editorPages.css";
+import "./editorPages.css";
 
 export const EditorPages: React.FC = () => {
   const [files, setFiles] = useState<YandexDiskFile[]>([]);

@@ -9,7 +9,7 @@ import mammoth from "mammoth";
 import Loader from "../../components/Loader/loader";
 import { Document, Packer, Paragraph, TextRun } from "docx";
 import { debounce } from "lodash";
-import "../styles/editor.css";
+import "./editor.css";
 
 export const Editor: React.FC = () => {
   const { filePath } = useParams<{ filePath?: string }>();
