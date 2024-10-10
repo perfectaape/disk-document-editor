@@ -56,16 +56,23 @@ export const fetchDocumentContent = async (
         headers: {
           Authorization: `OAuth ${oauthToken}`,
         },
+        maxRedirects: 0,
       }
     );
 
-    const downloadUrl = response.data.href;
-    const fileResponse = await axios.get(downloadUrl, {
-      responseType: "arraybuffer",
-    });
-    return fileResponse.data;
+    if (response.status === 200 && response.data.href) {
+      const downloadUrl = response.data.href;
+
+      const fileResponse = await axios.get(downloadUrl, {
+        responseType: "arraybuffer",
+      });
+
+      return fileResponse.data;
+    } else {
+      throw new Error("Не удалось получить ссылку для скачивания");
+    }
   } catch (error) {
-    console.error("Error fetching document content:", error);
+    console.error("Ошибка при загрузке документа:", error);
     throw error;
   }
 };

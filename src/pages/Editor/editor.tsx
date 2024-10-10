@@ -4,9 +4,9 @@ import {
   fetchDocumentContent,
   getCookie,
   saveDocumentContent,
-} from "../api/yandexApi";
+} from "../../api/yandexApi";
 import mammoth from "mammoth";
-import Loader from "../components/loader";
+import Loader from "../../components/Loader/loader";
 import { Document, Packer, Paragraph, TextRun } from "docx";
 import { debounce } from "lodash";
 import "../styles/editor.css";

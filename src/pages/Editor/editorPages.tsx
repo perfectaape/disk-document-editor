@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
-import { fetchFiles, getCookie, YandexDiskFile } from "../api/yandexApi";
+import { fetchFiles, getCookie, YandexDiskFile } from "../../api/yandexApi";
 import { useNavigate } from "react-router-dom";
-import Loader from "../components/loader";
+import Loader from "../../components/Loader/loader";
 import "../styles/editorPages.css";
 
 export const EditorPages: React.FC = () => {

@@ -1,6 +1,6 @@
 import React, { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { getCookie } from "../api/yandexApi";
+import { getCookie } from "../../api/yandexApi";
 
 export const MainPages: React.FC = () => {
   const navigate = useNavigate();

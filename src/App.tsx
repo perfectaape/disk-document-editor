@@ -1,9 +1,9 @@
 import React from "react";
 import { Route, BrowserRouter, Routes } from "react-router-dom";
-import { MainPages } from "./pages/mainPages";
-import { AuthPages } from "./pages/authPages";
-import { EditorPages } from "./pages/editorPages";
-import { Editor } from "./pages/editor";
+import { AuthPages } from "./pages/Auth/authPages";
+import { Editor } from "./pages/Editor/editor";
+import { EditorPages } from "./pages/Editor/editorPages";
+import { MainPages } from "./pages/Main/mainPages";
 
 const App: React.FC = () => {
   return (
