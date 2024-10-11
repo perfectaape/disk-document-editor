@@ -116,7 +116,6 @@ export const Editor: React.FC = () => {
         onChange={handleChange}
         rows={10}
         cols={50}
-        style={{ width: "100%", height: "200px" }}
       />
       {saving && <div className="loading-indicator"></div>}
       <button onClick={() => handleSaveDocument(content)}>Сохранить</button>
