@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { fetchFiles, getCookie, YandexDiskFile } from "../../api/yandexApi";
 import { useNavigate } from "react-router-dom";
 import Loader from "../../components/Loader/loader";
@@ -10,6 +10,19 @@ export const EditorPages: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
 
+  const fetchAndSetFiles = useCallback(async (token: string) => {
+    setLoading(true);
+    try {
+      const fetchedFiles = await fetchFiles(token);
+      setFiles(fetchedFiles);
+    } catch (error) {
+      console.error("Ошибка при загрузке файлов:", error);
+      setError("Ошибка при загрузке файлов.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     const token = getCookie("yandex_token");
     if (!token) {
@@ -18,35 +31,22 @@ export const EditorPages: React.FC = () => {
     }
 
     fetchAndSetFiles(token);
-  }, [navigate]);
+  }, [navigate, fetchAndSetFiles]);
 
-  const handleDocument = (filePath: string): void => {
-    const encodedPath = encodeFilePath(filePath);
-    navigate(`/editor/${encodedPath}`);
-  };
-
-  const encodeFilePath = (filePath: string): string => {
-    return encodeURIComponent(filePath);
-  };
-
-  const fetchAndSetFiles = async (token: string) => {
-    setLoading(true);
-    try {
-      const fetchedFiles = await fetchFiles(token);
-      setFiles(fetchedFiles);
-    } catch {
-      setError("Ошибка при загрузке файлов.");
-    } finally {
-      setLoading(false);
-    }
-  };
+  const handleDocument = useCallback(
+    (filePath: string): void => {
+      const encodedPath = encodeURIComponent(filePath);
+      navigate(`/editor/${encodedPath}`);
+    },
+    [navigate]
+  );
 
   if (loading) {
     return <Loader />;
   }
 
   if (error) {
-    return <div>{error}</div>;
+    return <div className="error-message">{error}</div>;
   }
 
   return (

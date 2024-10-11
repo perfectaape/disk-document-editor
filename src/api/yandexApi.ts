@@ -1,12 +1,15 @@
 import axios, { AxiosResponse } from "axios";
 
+const apiClient = axios.create({
+  baseURL: "https://cloud-api.yandex.net/v1/disk",
+  headers: {
+    "Content-Type": "application/json",
+  },
+});
+
 export function getCookie(name: string): string | undefined {
-  const value: string = `; ${document.cookie}`;
-  const parts = value.split(`; ${name}=`);
-  if (parts.length === 2) {
-    return parts.pop()?.split(";").shift();
-  }
-  return undefined;
+  const match = document.cookie.match(new RegExp(`(^| )${name}=([^;]+)`));
+  return match ? match[2] : undefined;
 }
 
 export interface YandexDiskFile {
@@ -23,20 +26,19 @@ export const fetchFiles = async (
   oauthToken: string
 ): Promise<YandexDiskFile[]> => {
   try {
-    const response: AxiosResponse<YandexDiskResponse> = await axios.get(
-      "https://cloud-api.yandex.net/v1/disk/resources/files/",
+    const response: AxiosResponse<YandexDiskResponse> = await apiClient.get(
+      "/resources/files/",
       {
         headers: {
           Authorization: `OAuth ${oauthToken}`,
         },
       }
     );
-    const textFiles = response.data.items.filter(
+    return response.data.items.filter(
       (item) =>
         item.mime_type ===
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
     );
-    return textFiles;
   } catch (error) {
     console.error("Error fetching files:", error);
     return [];
@@ -48,10 +50,8 @@ export const fetchDocumentContent = async (
   oauthToken: string
 ): Promise<ArrayBuffer> => {
   try {
-    const response = await axios.get(
-      `https://cloud-api.yandex.net/v1/disk/resources/download?path=${encodeURIComponent(
-        path
-      )}`,
+    const response = await apiClient.get(
+      `/resources/download?path=${encodeURIComponent(path)}`,
       {
         headers: {
           Authorization: `OAuth ${oauthToken}`,
@@ -61,12 +61,9 @@ export const fetchDocumentContent = async (
     );
 
     if (response.status === 200 && response.data.href) {
-      const downloadUrl = response.data.href;
-
-      const fileResponse = await axios.get(downloadUrl, {
+      const fileResponse = await axios.get(response.data.href, {
         responseType: "arraybuffer",
       });
-
       return fileResponse.data;
     } else {
       throw new Error("Не удалось получить ссылку для скачивания");
@@ -83,10 +80,8 @@ export const saveDocumentContent = async (
   content: ArrayBuffer
 ): Promise<void> => {
   try {
-    const response = await axios.get(
-      `https://cloud-api.yandex.net/v1/disk/resources/upload?path=${encodeURIComponent(
-        path
-      )}&overwrite=true`,
+    const response = await apiClient.get(
+      `/resources/upload?path=${encodeURIComponent(path)}&overwrite=true`,
       {
         headers: {
           Authorization: `OAuth ${oauthToken}`,
