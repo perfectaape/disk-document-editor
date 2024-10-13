@@ -2,30 +2,12 @@
   display: flex;
   flex-direction: column;
   padding-top: 24px;
-  width: 100%;
+  width: auto;
   position: relative;
 }
 
 h1 {
   padding-bottom: 24px;
-}
-
-button {
-  border: none;
-  border-radius: 8px;
-  padding: 12px 112px;
-  box-shadow: 0 0 12px 0 rgba(255, 220, 96, 0.47);
-  background: #ffdc60;
-  font-weight: 500;
-  font-size: 16px;
-  transition: 0.3s ease-in-out;
-  margin-top: 32px;
-}
-
-button:hover {
-  background-color: #111003;
-  color: #ffdc60;
-  transform: scale(1.1);
 }
 
 .textarea-editor {
@@ -78,10 +60,19 @@ button:hover {
 }
 
 .back-button {
+  border-radius: 8px;
+  box-shadow: 0 0 12px 0 rgba(255, 220, 96, 0.47);
   position: fixed;
   top: 10px;
   left: 64px;
   padding: 10px 15px;
   background-color: #1c1a06;
   color: #ffdc60;
+  transition: 0.3s ease-in-out;
+}
+
+.back-button:hover {
+  background-color: #111003;
+  color: #ffdc60;
+  transform: scale(1.1);
 }

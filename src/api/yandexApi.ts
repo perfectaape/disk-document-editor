@@ -1,108 +1,96 @@
 import axios, { AxiosResponse } from "axios";
-
-const apiClient = axios.create({
-  baseURL: "https://cloud-api.yandex.net/v1/disk",
-  headers: {
-    "Content-Type": "application/json",
-  },
-});
-
-export function getCookie(name: string): string | undefined {
-  const match = document.cookie.match(new RegExp(`(^| )${name}=([^;]+)`));
-  return match ? match[2] : undefined;
-}
-
-export interface YandexDiskFile {
-  name: string;
-  path: string;
-  mime_type: string;
-}
+import { IFileAPI, File } from "./fileApi";
 
 export interface YandexDiskResponse {
-  items: YandexDiskFile[];
+  items: File[];
 }
 
-export const fetchFiles = async (
-  oauthToken: string
-): Promise<YandexDiskFile[]> => {
-  try {
-    const response: AxiosResponse<YandexDiskResponse> = await apiClient.get(
-      "/resources/files/",
-      {
-        headers: {
-          Authorization: `OAuth ${oauthToken}`,
-        },
-      }
-    );
-    return response.data.items.filter(
-      (item) =>
-        item.mime_type ===
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-    );
-  } catch (error) {
-    console.error("Error fetching files:", error);
-    return [];
-  }
-};
+export class YandexApi implements IFileAPI {
+  private apiClient = axios.create({
+    baseURL: "https://cloud-api.yandex.net/v1/disk",
+    headers: {
+      "Content-Type": "application/json",
+    },
+  });
 
-export const fetchDocumentContent = async (
-  path: string,
-  oauthToken: string
-): Promise<ArrayBuffer> => {
-  try {
-    const response = await apiClient.get(
-      `/resources/download?path=${encodeURIComponent(path)}`,
-      {
-        headers: {
-          Authorization: `OAuth ${oauthToken}`,
-        },
-        maxRedirects: 0,
-      }
-    );
-
-    if (response.status === 200 && response.data.href) {
-      const fileResponse = await axios.get(response.data.href, {
-        responseType: "arraybuffer",
-      });
-      return fileResponse.data;
-    } else {
-      throw new Error("Не удалось получить ссылку для скачивания");
+  async fetchFiles(oauthToken: string): Promise<File[]> {
+    try {
+      const response: AxiosResponse<YandexDiskResponse> =
+        await this.apiClient.get("/resources/files/", {
+          headers: {
+            Authorization: `OAuth ${oauthToken}`,
+          },
+        });
+      return response.data.items.filter(
+        (item) =>
+          item.mime_type ===
+          "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+      );
+    } catch (error) {
+      console.error("Error fetching files:", error);
+      return [];
     }
-  } catch (error) {
-    console.error("Ошибка при загрузке документа:", error);
-    throw error;
   }
-};
 
-export const saveDocumentContent = async (
-  path: string,
-  oauthToken: string,
-  content: ArrayBuffer
-): Promise<void> => {
-  try {
-    const response = await apiClient.get(
-      `/resources/upload?path=${encodeURIComponent(path)}&overwrite=true`,
-      {
-        headers: {
-          Authorization: `OAuth ${oauthToken}`,
-        },
+  async fetchDocumentContent(
+    path: string,
+    oauthToken: string
+  ): Promise<ArrayBuffer> {
+    try {
+      const response = await this.apiClient.get(
+        `/resources/download?path=${encodeURIComponent(path)}`,
+        {
+          headers: {
+            Authorization: `OAuth ${oauthToken}`,
+          },
+          maxRedirects: 0,
+        }
+      );
+
+      if (response.status === 200 && response.data.href) {
+        const fileResponse = await axios.get(response.data.href, {
+          responseType: "arraybuffer",
+        });
+        return fileResponse.data;
+      } else {
+        throw new Error("Не удалось получить ссылку для скачивания");
       }
-    );
-
-    const uploadUrl = response.data.href;
-
-    const blob = new Blob([content], {
-      type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    });
-
-    await axios.put(uploadUrl, blob, {
-      headers: {
-        "Content-Type":
-          "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-      },
-    });
-  } catch (error) {
-    console.error("Ошибка при сохранении содержимого документа:", error);
-    throw error;
+    } catch (error) {
+      console.error("Ошибка при загрузке документа:", error);
+      throw error;
+    }
   }
-};
+
+  async saveDocumentContent(
+    path: string,
+    oauthToken: string,
+    content: ArrayBuffer
+  ): Promise<void> {
+    try {
+      const response = await this.apiClient.get(
+        `/resources/upload?path=${encodeURIComponent(path)}&overwrite=true`,
+        {
+          headers: {
+            Authorization: `OAuth ${oauthToken}`,
+          },
+        }
+      );
+
+      const uploadUrl = response.data.href;
+
+      const blob = new Blob([content], {
+        type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      });
+
+      await axios.put(uploadUrl, blob, {
+        headers: {
+          "Content-Type":
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        },
+      });
+    } catch (error) {
+      console.error("Ошибка при сохранении содержимого документа:", error);
+      throw error;
+    }
+  }
+}

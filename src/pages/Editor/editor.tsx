@@ -1,37 +1,50 @@
-import React, { useEffect, useRef, useState, useCallback } from "react";
+import React, {
+  useEffect,
+  useRef,
+  useState,
+  useCallback,
+  useMemo,
+} from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import {
-  fetchDocumentContent,
-  getCookie,
-  saveDocumentContent,
-} from "../../api/yandexApi";
+import { YandexApi } from "../../api/yandexApi";
+import { GoogleApi } from "../../api/googleApi";
 import mammoth from "mammoth";
-import Loader from "../../components/Loader/loader";
 import { Document, Packer, Paragraph, TextRun } from "docx";
 import { debounce } from "lodash";
 import "./editor.css";
+import { getCookie } from "../../api/fileApi";
+import Loader from "../../components/Loader/loader";
 
 export const Editor: React.FC = () => {
-  const { filePath } = useParams<{ filePath?: string }>();
+  const { service, filePath } = useParams<{
+    service: "yandex" | "google";
+    filePath?: string;
+  }>();
   const [content, setContent] = useState<string>("");
-  const [loading, setLoading] = useState<boolean>(true);
   const [saving, setSaving] = useState<boolean>(false);
   const navigate = useNavigate();
+  const [loading, setLoading] = useState<boolean>(true);
+  const yandexApi = useMemo(() => new YandexApi(), []);
+  const googleApi = useMemo(() => new GoogleApi(), []);
 
   const checkToken = useCallback(() => {
-    const token = getCookie("yandex_token");
-    if (!token) {
+    const yandexToken = getCookie("yandex_token");
+    const googleToken = getCookie("google_token");
+    if (!yandexToken && !googleToken) {
       navigate("/");
       return null;
     }
-    return token;
-  }, [navigate]);
+    return service === "yandex" ? yandexToken : googleToken;
+  }, [navigate, service]);
 
   const handleFetchDocumentContent = useCallback(
     async (fileName: string, oauthToken: string) => {
       setLoading(true);
       try {
-        const arrayBuffer = await fetchDocumentContent(fileName, oauthToken);
+        const arrayBuffer =
+          service === "yandex"
+            ? await yandexApi.fetchDocumentContent(fileName, oauthToken)
+            : await googleApi.fetchDocumentContent(fileName, oauthToken);
         const { value: html } = await mammoth.convertToHtml({ arrayBuffer });
         const parser = new DOMParser();
         const doc = parser.parseFromString(html, "text/html");
@@ -42,7 +55,7 @@ export const Editor: React.FC = () => {
         setLoading(false);
       }
     },
-    []
+    [service, yandexApi, googleApi]
   );
 
   useEffect(() => {
@@ -76,14 +89,26 @@ export const Editor: React.FC = () => {
           ],
         });
         const blob = await Packer.toBlob(doc);
-        await saveDocumentContent(filePath!, token, await blob.arrayBuffer());
+        if (service === "yandex") {
+          await yandexApi.saveDocumentContent(
+            filePath!,
+            token,
+            await blob.arrayBuffer()
+          );
+        } else {
+          await googleApi.saveDocumentContent(
+            filePath!,
+            token,
+            await blob.arrayBuffer()
+          );
+        }
       } catch (error) {
         console.error("Ошибка при сохранении содержимого документа:", error);
       } finally {
         setSaving(false);
       }
     },
-    [filePath, checkToken]
+    [filePath, checkToken, service, yandexApi, googleApi]
   );
 
   const debouncedSaveDocument = useRef(
@@ -118,7 +143,9 @@ export const Editor: React.FC = () => {
         cols={50}
       />
       {saving && <div className="loading-indicator"></div>}
-      <button onClick={() => handleSaveDocument(content)}>Сохранить</button>
+      <button className="start-btn" onClick={() => handleSaveDocument(content)}>
+        Сохранить
+      </button>
     </div>
   );
 };

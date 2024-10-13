@@ -12,7 +12,7 @@ const App: React.FC = () => {
         <Route path="/" element={<MainPages />} />
         <Route path="/auth" element={<AuthPages />} />
         <Route path="/editor" element={<EditorPages />} />
-        <Route path="/editor/:filePath" element={<Editor />} />
+        <Route path="/editor/:service/:filePath" element={<Editor />} />
       </Routes>
     </BrowserRouter>
   );
