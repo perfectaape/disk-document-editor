@@ -34,3 +34,10 @@
   background-color: #0056b3;
   color: #fff;
 }
+
+.no-files-message {
+  margin-top: 20px;
+  text-align: center;
+  font-size: 1.5em;
+  color: #888;
+}

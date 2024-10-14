@@ -8,8 +8,6 @@ import React, {
 import { useNavigate, useParams } from "react-router-dom";
 import { YandexApi } from "../../api/yandexApi";
 import { GoogleApi } from "../../api/googleApi";
-import mammoth from "mammoth";
-import { Document, Packer, Paragraph, TextRun } from "docx";
 import { debounce } from "lodash";
 import "./editor.css";
 import { getCookie } from "../../api/fileApi";
@@ -41,14 +39,11 @@ export const Editor: React.FC = () => {
     async (fileName: string, oauthToken: string) => {
       setLoading(true);
       try {
-        const arrayBuffer =
+        const content =
           service === "yandex"
             ? await yandexApi.fetchDocumentContent(fileName, oauthToken)
             : await googleApi.fetchDocumentContent(fileName, oauthToken);
-        const { value: html } = await mammoth.convertToHtml({ arrayBuffer });
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(html, "text/html");
-        setContent(doc.body.innerText);
+        setContent(content);
       } catch (error) {
         console.error("Ошибка при получении содержимого документа:", error);
       } finally {
@@ -76,31 +71,10 @@ export const Editor: React.FC = () => {
 
       setSaving(true);
       try {
-        const doc = new Document({
-          sections: [
-            {
-              properties: {},
-              children: [
-                new Paragraph({
-                  children: [new TextRun(text)],
-                }),
-              ],
-            },
-          ],
-        });
-        const blob = await Packer.toBlob(doc);
         if (service === "yandex") {
-          await yandexApi.saveDocumentContent(
-            filePath!,
-            token,
-            await blob.arrayBuffer()
-          );
+          await yandexApi.saveDocumentContent(filePath!, token, text);
         } else {
-          await googleApi.saveDocumentContent(
-            filePath!,
-            token,
-            await blob.arrayBuffer()
-          );
+          await googleApi.saveDocumentContent(filePath!, token, text);
         }
       } catch (error) {
         console.error("Ошибка при сохранении содержимого документа:", error);

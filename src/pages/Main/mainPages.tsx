@@ -36,7 +36,7 @@ export const MainPages: React.FC = () => {
         документов из Яндекс.Диск
       </h1>
       <p className="subtittle">
-        Перед началом необходимо получить токены доступа, нажам на кнопку
+        Перед началом необходимо получить токены доступа, нажав на кнопку
       </p>
       <button className="start-btn" onClick={handleYandexLogin}>
         Войти через Яндекс

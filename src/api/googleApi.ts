@@ -21,7 +21,7 @@ export class GoogleApi implements IFileAPI {
             Authorization: `Bearer ${oauthToken}`,
           },
           params: {
-            q: "mimeType='application/vnd.openxmlformats-officedocument.wordprocessingml.document'",
+            q: "mimeType='text/plain'",
             fields: "files(id, name, mimeType)",
           },
         });
@@ -41,7 +41,7 @@ export class GoogleApi implements IFileAPI {
   async fetchDocumentContent(
     fileId: string,
     oauthToken: string
-  ): Promise<ArrayBuffer> {
+  ): Promise<string> {
     try {
       const response = await this.apiClient.get(`/files/${fileId}`, {
         headers: {
@@ -53,7 +53,8 @@ export class GoogleApi implements IFileAPI {
         responseType: "arraybuffer",
       });
 
-      return response.data;
+      const decoder = new TextDecoder("utf-8");
+      return decoder.decode(response.data);
     } catch (error) {
       console.error("Ошибка при загрузке документа из Google Drive:", error);
       throw error;
@@ -63,19 +64,18 @@ export class GoogleApi implements IFileAPI {
   async saveDocumentContent(
     fileId: string,
     oauthToken: string,
-    content: ArrayBuffer
+    content: string
   ): Promise<void> {
     try {
       const uploadUrl = `https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`;
 
       const blob = new Blob([content], {
-        type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        type: "text/plain",
       });
 
       await axios.patch(uploadUrl, blob, {
         headers: {
-          "Content-Type":
-            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          "Content-Type": "text/plain",
           Authorization: `Bearer ${oauthToken}`,
         },
       });

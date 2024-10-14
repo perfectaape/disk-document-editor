@@ -8,12 +8,14 @@ import { MainPages } from "./pages/Main/mainPages";
 const App: React.FC = () => {
   return (
     <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<MainPages />} />
-        <Route path="/auth" element={<AuthPages />} />
-        <Route path="/editor" element={<EditorPages />} />
-        <Route path="/editor/:service/:filePath" element={<Editor />} />
-      </Routes>
+      <div>
+        <Routes>
+          <Route path="/" element={<MainPages />} />
+          <Route path="/auth" element={<AuthPages />} />
+          <Route path="/editor" element={<EditorPages />} />
+          <Route path="/editor/:service/:filePath" element={<Editor />} />
+        </Routes>
+      </div>
     </BrowserRouter>
   );
 };

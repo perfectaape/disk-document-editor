@@ -27,6 +27,10 @@ export const DocumentBody: React.FC<DocumentBodyProps> = ({
     [navigate, activeService]
   );
 
+  if (files.length === 0) {
+    return <h2 className="no-files-message">Нет доступных файлов</h2>;
+  }
+
   return (
     <div className="desktop-icon-container">
       {files.map((file) => (

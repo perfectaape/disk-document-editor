@@ -1,10 +1,10 @@
 export interface IFileAPI {
   fetchFiles: (oauthToken: string) => Promise<File[]>;
-  fetchDocumentContent(path: string, oauthToken: string): Promise<ArrayBuffer>;
+  fetchDocumentContent(path: string, oauthToken: string): Promise<string>;
   saveDocumentContent(
     path: string,
     oauthToken: string,
-    content: ArrayBuffer
+    content: string
   ): Promise<void>;
 }
 

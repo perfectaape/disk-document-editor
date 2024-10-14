@@ -22,9 +22,7 @@ export class YandexApi implements IFileAPI {
           },
         });
       return response.data.items.filter(
-        (item) =>
-          item.mime_type ===
-          "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        (item) => item.mime_type === "text/plain"
       );
     } catch (error) {
       console.error("Error fetching files:", error);
@@ -35,7 +33,7 @@ export class YandexApi implements IFileAPI {
   async fetchDocumentContent(
     path: string,
     oauthToken: string
-  ): Promise<ArrayBuffer> {
+  ): Promise<string> {
     try {
       const response = await this.apiClient.get(
         `/resources/download?path=${encodeURIComponent(path)}`,
@@ -51,7 +49,10 @@ export class YandexApi implements IFileAPI {
         const fileResponse = await axios.get(response.data.href, {
           responseType: "arraybuffer",
         });
-        return fileResponse.data;
+
+        const decoder = new TextDecoder("utf-8");
+        const textContent = decoder.decode(fileResponse.data);
+        return textContent;
       } else {
         throw new Error("Не удалось получить ссылку для скачивания");
       }
@@ -64,7 +65,7 @@ export class YandexApi implements IFileAPI {
   async saveDocumentContent(
     path: string,
     oauthToken: string,
-    content: ArrayBuffer
+    content: string
   ): Promise<void> {
     try {
       const response = await this.apiClient.get(
@@ -79,13 +80,12 @@ export class YandexApi implements IFileAPI {
       const uploadUrl = response.data.href;
 
       const blob = new Blob([content], {
-        type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        type: "text/plain",
       });
 
       await axios.put(uploadUrl, blob, {
         headers: {
-          "Content-Type":
-            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          "Content-Type": "text/plain",
         },
       });
     } catch (error) {
