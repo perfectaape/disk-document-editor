@@ -13,19 +13,38 @@ export class YandexApi implements IFileAPI {
     },
   });
 
-  async fetchFiles(oauthToken: string): Promise<File[]> {
+  async fetchFiles(oauthToken: string, path: string = "/"): Promise<File[]> {
     try {
-      const response: AxiosResponse<YandexDiskResponse> =
-        await this.apiClient.get("/resources/files/", {
+      const response: AxiosResponse<File> = // Измените тип на any для отладки
+        await this.apiClient.get("/resources", {
           headers: {
             Authorization: `OAuth ${oauthToken}`,
           },
+          params: {
+            path: path,
+            limit: 1000,
+          },
         });
-      return response.data.items.filter(
-        (item) => item.mime_type === "text/plain"
-      );
+
+      console.log("Полный ответ от API:", response.data);
+
+      if (
+        response.data &&
+        response.data._embedded &&
+        response.data._embedded.items
+      ) {
+        return response.data._embedded.items.map((item: File) => ({
+          name: item.name,
+          path: item.path,
+          mime_type: item.mime_type,
+          type: item.type,
+        }));
+      } else {
+        console.error("Нет данных о файлах в ответе");
+        return [];
+      }
     } catch (error) {
-      console.error("Error fetching files:", error);
+      console.error("Ошибка при получении файлов:", error);
       return [];
     }
   }

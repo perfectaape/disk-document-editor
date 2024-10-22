@@ -9,6 +9,9 @@ export const MainPages: React.FC = () => {
     const yandexToken = getCookie("yandex_token");
     const googleToken = getCookie("google_token");
 
+    console.log("Yandex Token:", yandexToken);
+    console.log("Google Token:", googleToken);
+
     if (yandexToken || googleToken) {
       navigate("/editor");
     }
@@ -30,11 +33,7 @@ export const MainPages: React.FC = () => {
 
   return (
     <div className="main-text">
-      <h1>
-        Это небольшой редактор тектовых
-        <br />
-        документов из Яндекс.Диск
-      </h1>
+      <h1>Это небольшой редактор тектовых</h1>
       <p className="subtittle">
         Перед началом необходимо получить токены доступа, нажав на кнопку
       </p>
