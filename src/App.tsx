@@ -1,9 +1,8 @@
 import React from "react";
 import { Route, BrowserRouter, Routes } from "react-router-dom";
 import { AuthPages } from "./pages/Auth/authPages";
-import { Editor } from "./pages/Editor/editor";
-import { EditorPages } from "./pages/Editor/editorPages";
 import { MainPages } from "./pages/Main/mainPages";
+import { FileManager } from "./pages/Editor/fileManager";
 
 const App: React.FC = () => {
   return (
@@ -12,8 +11,11 @@ const App: React.FC = () => {
         <Routes>
           <Route path="/" element={<MainPages />} />
           <Route path="/auth" element={<AuthPages />} />
-          <Route path="/editor" element={<EditorPages />} />
-          <Route path="/editor/:service/:filePath" element={<Editor />} />
+          <Route path="/explorer/:service" element={<FileManager />} />
+          <Route
+            path="/explorer/:service/:filePath"
+            element={<FileManager />}
+          />
         </Routes>
       </div>
     </BrowserRouter>

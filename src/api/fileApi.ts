@@ -1,23 +1,26 @@
 export interface IFileAPI {
-  fetchFiles: (oauthToken: string, path: string) => Promise<File[]>;
-  fetchDocumentContent(path: string, oauthToken: string): Promise<string>;
+  fetchFiles(oauthToken: string, path?: string): Promise<File[]>;
+  fetchDocumentContent(
+    path: string,
+    oauthToken: string,
+    signal?: AbortSignal
+  ): Promise<string | undefined>; // Обновлено
   saveDocumentContent(
     path: string,
     oauthToken: string,
     content: string
   ): Promise<void>;
-  // Добавьте другие методы, такие как перемещение, переименование и т.д.
 }
 
 export interface File {
   name: string;
-  path?: string;
-  id?: string;
+  path: string;
   mime_type: string;
-  type?: string;
+  type: string;
   _embedded?: {
     items: File[];
   };
+  children?: File[];
 }
 
 export function getCookie(name: string): string | undefined {

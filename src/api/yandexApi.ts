@@ -1,22 +1,20 @@
-import axios, { AxiosResponse } from "axios";
+import axios, { AxiosInstance, AxiosResponse } from "axios";
 import { IFileAPI, File } from "./fileApi";
 
-export interface YandexDiskResponse {
-  items: File[];
-}
-
 export class YandexApi implements IFileAPI {
-  private apiClient = axios.create({
-    baseURL: "https://cloud-api.yandex.net/v1/disk",
-    headers: {
-      "Content-Type": "application/json",
-    },
-  });
+  private apiClient: AxiosInstance;
+
+  constructor() {
+    this.apiClient = axios.create({
+      baseURL: "https://cloud-api.yandex.net/v1/disk",
+    });
+  }
 
   async fetchFiles(oauthToken: string, path: string = "/"): Promise<File[]> {
     try {
-      const response: AxiosResponse<File> = // Измените тип на any для отладки
-        await this.apiClient.get("/resources", {
+      const response: AxiosResponse<File> = await this.apiClient.get(
+        "/resources",
+        {
           headers: {
             Authorization: `OAuth ${oauthToken}`,
           },
@@ -24,21 +22,28 @@ export class YandexApi implements IFileAPI {
             path: path,
             limit: 1000,
           },
-        });
-
-      console.log("Полный ответ от API:", response.data);
+        }
+      );
 
       if (
         response.data &&
         response.data._embedded &&
         response.data._embedded.items
       ) {
-        return response.data._embedded.items.map((item: File) => ({
-          name: item.name,
-          path: item.path,
-          mime_type: item.mime_type,
-          type: item.type,
-        }));
+        const items = response.data._embedded.items;
+
+        // Рекурсивно загружаем содержимое для каждой папки
+        const filesWithChildren = await Promise.all(
+          items.map(async (item: File) => {
+            if (item.type === "dir") {
+              const children = await this.fetchFiles(oauthToken, item.path);
+              return { ...item, children };
+            }
+            return item;
+          })
+        );
+
+        return filesWithChildren;
       } else {
         console.error("Нет данных о файлах в ответе");
         return [];
@@ -51,8 +56,10 @@ export class YandexApi implements IFileAPI {
 
   async fetchDocumentContent(
     path: string,
-    oauthToken: string
-  ): Promise<string> {
+    oauthToken: string,
+    signal?: AbortSignal
+  ): Promise<string | undefined> {
+    // Указываем, что функция может вернуть undefined
     try {
       const response = await this.apiClient.get(
         `/resources/download?path=${encodeURIComponent(path)}`,
@@ -61,12 +68,14 @@ export class YandexApi implements IFileAPI {
             Authorization: `OAuth ${oauthToken}`,
           },
           maxRedirects: 0,
+          signal, // Используем AbortSignal здесь
         }
       );
 
       if (response.status === 200 && response.data.href) {
         const fileResponse = await axios.get(response.data.href, {
           responseType: "arraybuffer",
+          signal, // Используем AbortSignal здесь
         });
 
         const decoder = new TextDecoder("utf-8");
@@ -76,8 +85,12 @@ export class YandexApi implements IFileAPI {
         throw new Error("Не удалось получить ссылку для скачивания");
       }
     } catch (error) {
-      console.error("Ошибка при загрузке документа:", error);
-      throw error;
+      if (axios.isCancel(error)) {
+        console.log("Запрос был отменен");
+      } else {
+        console.error("Ошибка при загрузке документа:", error);
+      }
+      return undefined; // Возвращаем undefined в случае ошибки
     }
   }
 
@@ -87,7 +100,8 @@ export class YandexApi implements IFileAPI {
     content: string
   ): Promise<void> {
     try {
-      const response = await this.apiClient.get(
+      // Получаем URL для загрузки
+      const uploadLinkResponse = await this.apiClient.get(
         `/resources/upload?path=${encodeURIComponent(path)}&overwrite=true`,
         {
           headers: {
@@ -96,17 +110,16 @@ export class YandexApi implements IFileAPI {
         }
       );
 
-      const uploadUrl = response.data.href;
-
-      const blob = new Blob([content], {
-        type: "text/plain",
-      });
-
-      await axios.put(uploadUrl, blob, {
-        headers: {
-          "Content-Type": "text/plain",
-        },
-      });
+      if (uploadLinkResponse.status === 200 && uploadLinkResponse.data.href) {
+        // Загружаем содержимое файла
+        await axios.put(uploadLinkResponse.data.href, content, {
+          headers: {
+            "Content-Type": "text/plain",
+          },
+        });
+      } else {
+        throw new Error("Не удалось получить ссылку для загрузки");
+      }
     } catch (error) {
       console.error("Ошибка при сохранении содержимого документа:", error);
       throw error;

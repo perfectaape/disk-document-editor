@@ -15,7 +15,7 @@ function transformGoogleFile(file: GoogleDriveFile): File {
   return {
     name: file.name,
     path: file.id,
-    mime_type: file.mimeType, // Convert mimeType to mime_type
+    mime_type: file.mimeType,
     type:
       file.mimeType === "application/vnd.google-apps.folder" ? "dir" : "file",
   };
@@ -45,28 +45,60 @@ export class GoogleApi implements IFileAPI {
           },
         });
 
-      console.log("Ответ от Google API:", response.data);
-
       if (response.data && response.data.files) {
-        return response.data.files.map((file: GoogleDriveFile) =>
+        const files = response.data.files.map((file: GoogleDriveFile) =>
           transformGoogleFile(file)
         );
+
+        const filesWithChildren = await Promise.all(
+          files.map(async (file) => {
+            if (file.type === "dir") {
+              const children = await this.fetchFiles(oauthToken, file.path);
+              return { ...file, children };
+            }
+            return file;
+          })
+        );
+
+        return filesWithChildren;
       } else {
-        console.warn("Нет файлов в ответе.");
+        console.warn("No files found in response.");
         return [];
       }
     } catch (error) {
-      console.error("Ошибка при получении файлов из Google Drive:", error);
+      console.error("Error fetching files from Google Drive:", error);
       if (axios.isAxiosError(error) && error.response) {
-        console.error("Ответ от Google API:", error.response.data);
+        console.error("Google API response:", error.response.data);
       }
       return [];
     }
   }
 
-  async fetchDocumentContent(
+  async fetchFileMetadata(
     fileId: string,
     oauthToken: string
+  ): Promise<GoogleDriveFile> {
+    try {
+      const response = await this.apiClient.get(`/files/${fileId}`, {
+        headers: {
+          Authorization: `Bearer ${oauthToken}`,
+        },
+        params: {
+          fields: "id, name, mimeType",
+        },
+      });
+
+      return response.data;
+    } catch (error) {
+      console.error("Error fetching file metadata from Google Drive:", error);
+      throw error;
+    }
+  }
+
+  async fetchDocumentContent(
+    fileId: string,
+    oauthToken: string,
+    signal?: AbortSignal
   ): Promise<string> {
     try {
       const response = await this.apiClient.get(`/files/${fileId}`, {
@@ -77,12 +109,16 @@ export class GoogleApi implements IFileAPI {
           alt: "media",
         },
         responseType: "arraybuffer",
+        signal,
       });
 
       const decoder = new TextDecoder("utf-8");
       return decoder.decode(response.data);
     } catch (error) {
-      console.error("Ошибка при загрузке документа из Google Drive:", error);
+      console.error(
+        "Error fetching document content from Google Drive:",
+        error
+      );
       throw error;
     }
   }
@@ -106,10 +142,7 @@ export class GoogleApi implements IFileAPI {
         },
       });
     } catch (error) {
-      console.error(
-        "Ошибка при сохранении содержимого документа в Google Drive:",
-        error
-      );
+      console.error("Error saving document content to Google Drive:", error);
       throw error;
     }
   }

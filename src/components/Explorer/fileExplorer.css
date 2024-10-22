@@ -1,0 +1,110 @@
+.file-explorer {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  width: 100%;
+  background-color: #f9f9f9;
+  border-right: 1px solid #ccc;
+  overflow-y: auto;
+}
+
+.file-explorer h1 {
+  font-size: 1.5em;
+  margin: 0;
+  padding: 20px;
+  background-color: #000;
+  color: #ffdc60;
+  text-align: center;
+}
+
+.file-tree {
+  list-style-type: none;
+  padding: 0;
+  margin: 0;
+}
+
+.file-tree li {
+  margin-left: 20px;
+  cursor: pointer;
+  transition: background-color 0.3s, color 0.3s;
+  position: relative;
+  padding: 10px 20px;
+  border-left: 2px solid transparent;
+}
+
+.file-tree li:hover {
+  background-color: #ffdd603b;
+  border-left-color: #ffcc00;
+}
+
+.file-tree li.active {
+  background-color: #ffdd60b3;
+  border-left-color: #ffcc00;
+}
+
+.file-tree li div {
+  display: flex;
+  align-items: center;
+}
+
+.file-tree li div::before {
+  content: " ";
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  margin-right: 10px;
+  background-size: contain;
+}
+
+.file-tree li::after {
+  content: "";
+  position: absolute;
+  left: 10px;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background-color: #ccc;
+}
+
+.file-tree li:last-child::after {
+  display: none;
+}
+
+.search-input {
+  width: calc(100% - 20px);
+  padding: 8px;
+  border: 1px solid #e5e5e5;
+  border-radius: 4px;
+  margin: 10px;
+  font-size: 16px;
+  transition: border-color 0.3s, box-shadow 0.3s;
+  background-color: #fff;
+  color: #000;
+}
+
+.search-input:focus {
+  border-color: #ffcc00;
+  box-shadow: 0 0 5px rgba(255, 204, 0, 0.5);
+  outline: none;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  font-size: 16px;
+  color: #333;
+  margin: 5px 10px 20px 20px;
+}
+
+.checkbox-label input[type="checkbox"] {
+  margin-right: 8px;
+  width: 18px;
+  height: 18px;
+  accent-color: #ffcc00;
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+
+.checkbox-label input[type="checkbox"]:hover {
+  transform: scale(1.1);
+}
