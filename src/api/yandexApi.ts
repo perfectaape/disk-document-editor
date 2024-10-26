@@ -94,6 +94,26 @@ export class YandexApi implements IFileAPI {
     }
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async fetchFileMetadata(path: string, oauthToken: string): Promise<any> {
+    try {
+      const response = await this.apiClient.get(`/resources`, {
+        headers: {
+          Authorization: `OAuth ${oauthToken}`,
+        },
+        params: {
+          path: path,
+          fields: "name, mime_type, created, modified",
+        },
+      });
+
+      return response.data;
+    } catch (error) {
+      console.error("Error fetching file metadata from Yandex Disk:", error);
+      throw error;
+    }
+  }
+
   async saveDocumentContent(
     path: string,
     oauthToken: string,
@@ -122,6 +142,22 @@ export class YandexApi implements IFileAPI {
       }
     } catch (error) {
       console.error("Ошибка при сохранении содержимого документа:", error);
+      throw error;
+    }
+  }
+  async deleteFile(path: string, oauthToken: string): Promise<void> {
+    try {
+      await this.apiClient.delete(`/resources`, {
+        headers: {
+          Authorization: `OAuth ${oauthToken}`,
+        },
+        params: {
+          path: path,
+        },
+      });
+      console.log(`File at path ${path} deleted successfully.`);
+    } catch (error) {
+      console.error("Ошибка при удалении файла:", error);
       throw error;
     }
   }

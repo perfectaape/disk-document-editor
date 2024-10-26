@@ -8,7 +8,7 @@ import { getCookie } from "../../api/fileApi";
 import Loader from "../../components/Loader/loader";
 import { AxiosError } from "axios";
 
-export const Editor: React.FC = () => {
+export const Editor: React.FC = React.memo(() => {
   const { service, filePath } = useParams<{
     service: "yandex" | "google";
     filePath?: string;
@@ -31,19 +31,22 @@ export const Editor: React.FC = () => {
     return service === "yandex" ? yandexToken : googleToken;
   }, [navigate, service]);
 
-  const isSupportedFormat = (fileName: string, mimeType: string) => {
-    return mimeType === "text/plain" || fileName.endsWith(".txt");
-  };
+  const isSupportedFormat = useCallback((mimeType: string) => {
+    return mimeType === "text/plain";
+  }, []);
 
   const handleFetchDocumentContent = useCallback(
     async (fileName: string, oauthToken: string, signal: AbortSignal) => {
       try {
         const fileMetadata =
           service === "yandex"
-            ? { mimeType: "text/plain" } // Предположим, что у нас есть способ получить MIME-тип для Яндекса
+            ? await yandexApi.fetchFileMetadata(fileName, oauthToken)
             : await googleApi.fetchFileMetadata(fileName, oauthToken);
 
-        if (!isSupportedFormat(fileName, fileMetadata.mimeType)) {
+        const mimeType =
+          service === "yandex" ? fileMetadata.mime_type : fileMetadata.mimeType;
+
+        if (!isSupportedFormat(mimeType)) {
           setUnsupportedFormat(true);
           setLoading(false);
           return;
@@ -84,7 +87,7 @@ export const Editor: React.FC = () => {
         setLoading(false);
       }
     },
-    [service, yandexApi, googleApi]
+    [service, yandexApi, googleApi, isSupportedFormat]
   );
 
   useEffect(() => {
@@ -134,15 +137,18 @@ export const Editor: React.FC = () => {
     [handleSaveDocument]
   );
 
-  const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const newText = e.target.value;
-    setContent(newText);
-    debouncedSaveDocument(newText);
-  };
+  const handleChange = useCallback(
+    (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+      const newText = e.target.value;
+      setContent(newText);
+      debouncedSaveDocument(newText);
+    },
+    [debouncedSaveDocument]
+  );
 
-  const handleClose = () => {
+  const handleClose = useCallback(() => {
     navigate(`/explorer/${service}`);
-  };
+  }, [navigate, service]);
 
   if (loading) {
     return <Loader />;
@@ -182,4 +188,4 @@ export const Editor: React.FC = () => {
       </button>
     </div>
   );
-};
+});

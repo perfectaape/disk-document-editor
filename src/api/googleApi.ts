@@ -146,4 +146,21 @@ export class GoogleApi implements IFileAPI {
       throw error;
     }
   }
+
+  async deleteFile(fileId: string, oauthToken: string): Promise<void> {
+    try {
+      await this.apiClient.delete(`/files/${fileId}`, {
+        headers: {
+          Authorization: `Bearer ${oauthToken}`,
+        },
+      });
+      console.log(`File with ID ${fileId} deleted successfully.`);
+    } catch (error) {
+      console.error("Error deleting file from Google Drive:", error);
+      if (axios.isAxiosError(error) && error.response) {
+        console.error("Google API response:", error.response.data);
+      }
+      throw error;
+    }
+  }
 }

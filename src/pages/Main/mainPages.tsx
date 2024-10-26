@@ -1,22 +1,6 @@
-import React, { useEffect } from "react";
-import { useNavigate } from "react-router-dom";
-import { getCookie } from "../../api/fileApi";
+import React from "react";
 
 export const MainPages: React.FC = () => {
-  const navigate = useNavigate();
-
-  useEffect(() => {
-    const yandexToken = getCookie("yandex_token");
-    const googleToken = getCookie("google_token");
-
-    console.log("Yandex Token:", yandexToken);
-    console.log("Google Token:", googleToken);
-
-    if (yandexToken || googleToken) {
-      navigate("/editor");
-    }
-  }, [navigate]);
-
   const handleYandexLogin = (): void => {
     const clientId: string = import.meta.env.VITE_YANDEX_CLIENT_ID;
     const redirectUri: string = import.meta.env.VITE_REDIRECT_URI;

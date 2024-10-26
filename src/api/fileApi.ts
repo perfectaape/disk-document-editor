@@ -4,12 +4,13 @@ export interface IFileAPI {
     path: string,
     oauthToken: string,
     signal?: AbortSignal
-  ): Promise<string | undefined>; // Обновлено
+  ): Promise<string | undefined>;
   saveDocumentContent(
     path: string,
     oauthToken: string,
     content: string
   ): Promise<void>;
+  deleteFile(path: string, oauthToken: string): Promise<void>;
 }
 
 export interface File {

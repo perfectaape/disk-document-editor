@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from "react";
 import { YandexApi } from "../../api/yandexApi";
 import FileTree from "../FileTree/fileTree";
 import { File, getCookie } from "../../api/fileApi";
+import Loader from "../../components/Loader/loader";
 import "./fileExplorer.css";
 import { useNavigate } from "react-router-dom";
 
@@ -11,6 +12,9 @@ export const YandexDiskExplorer: React.FC = () => {
   const [openFolders, setOpenFolders] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [showOnlySupported, setShowOnlySupported] = useState<boolean>(false);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [showDeleteDialog, setShowDeleteDialog] = useState<boolean>(false);
+  const [fileToDelete, setFileToDelete] = useState<string | null>(null);
   const oauthToken = getCookie("yandex_token");
   const navigate = useNavigate();
 
@@ -18,12 +22,14 @@ export const YandexDiskExplorer: React.FC = () => {
     const fetchFiles = async () => {
       if (!oauthToken) {
         console.error("OAuth token is missing");
+        setLoading(false);
         return;
       }
 
       const yandexApi = new YandexApi();
       const fetchedFiles = await yandexApi.fetchFiles(oauthToken, "/");
       setFiles(fetchedFiles);
+      setLoading(false);
     };
 
     fetchFiles();
@@ -78,12 +84,42 @@ export const YandexDiskExplorer: React.FC = () => {
         ) {
           return file;
         }
-        return null;
+        return undefined;
       })
-      .filter((file) => file !== null) as File[];
+      .filter((file): file is File => file !== undefined);
+  };
+
+  const handleDeleteFile = (filePath: string) => {
+    setFileToDelete(filePath);
+    setShowDeleteDialog(true);
+  };
+
+  const confirmDelete = async () => {
+    if (fileToDelete && oauthToken) {
+      const yandexApi = new YandexApi();
+      try {
+        await yandexApi.deleteFile(fileToDelete, oauthToken);
+        setFiles((prevFiles) =>
+          prevFiles.filter((file) => file.path !== fileToDelete)
+        );
+        setShowDeleteDialog(false);
+        setFileToDelete(null);
+      } catch (error) {
+        console.error("Ошибка при удалении файла:", error);
+      }
+    }
+  };
+
+  const cancelDelete = () => {
+    setShowDeleteDialog(false);
+    setFileToDelete(null);
   };
 
   const filteredFiles = filterFiles(files);
+
+  if (loading) {
+    return <Loader />;
+  }
 
   return (
     <div className="file-explorer">
@@ -109,7 +145,18 @@ export const YandexDiskExplorer: React.FC = () => {
         onFileClick={handleFileClick}
         openFolders={openFolders}
         toggleFolder={toggleFolder}
+        onDeleteFile={handleDeleteFile}
       />
+      {showDeleteDialog && (
+        <div className="modal">
+          <div className="modal-content">
+            <h2>Подтверждение удаления</h2>
+            <p>Вы уверены, что хотите удалить этот файл?</p>
+            <button onClick={confirmDelete}>Удалить</button>
+            <button onClick={cancelDelete}>Отмена</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
