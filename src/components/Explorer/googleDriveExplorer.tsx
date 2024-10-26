@@ -106,7 +106,20 @@ export const GoogleDriveExplorer: React.FC<GoogleDriveExplorerProps> = ({
       setIsDeleting(true); // Start the loading indicator
       const googleApi = new GoogleApi();
       try {
+        // Fetch the folder contents if it's a directory
+        const folderContents = await googleApi.fetchFiles(
+          oauthToken,
+          fileToDelete
+        );
+
+        // Delete all files inside the folder
+        for (const file of folderContents) {
+          await googleApi.deleteFile(file.path, oauthToken);
+        }
+
+        // Now delete the folder itself
         await googleApi.deleteFile(fileToDelete, oauthToken);
+
         setFiles((prevFiles) =>
           prevFiles.filter((file) => file.path !== fileToDelete)
         );
@@ -131,12 +144,9 @@ export const GoogleDriveExplorer: React.FC<GoogleDriveExplorerProps> = ({
 
   const filteredFiles = filterFiles(files);
 
-  if (loading) {
-    return <Loader />;
-  }
-
   return (
     <div className="file-explorer">
+      {loading && <Loader />} {/* Show loader only when loading files */}
       <h1>Google Drive</h1>
       <input
         type="text"
@@ -175,7 +185,6 @@ export const GoogleDriveExplorer: React.FC<GoogleDriveExplorerProps> = ({
           </div>
         </div>
       )}
-      {isDeleting && <Loader />} {/* Show loader during deletion */}
     </div>
   );
 };

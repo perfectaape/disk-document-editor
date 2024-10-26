@@ -1,4 +1,11 @@
 import React, { useEffect, useState, useCallback } from "react";
+import { useDispatch, useSelector } from "react-redux";
+import { RootState } from "../../store/store";
+import {
+  setFiles,
+  deleteFile,
+  setActiveFilePath,
+} from "../../store/fileActions";
 import { YandexApi } from "../../api/yandexApi";
 import FileTree from "../FileTree/fileTree";
 import { File, getCookie } from "../../api/fileApi";
@@ -13,8 +20,10 @@ interface YandexDiskExplorerProps {
 export const YandexDiskExplorer: React.FC<YandexDiskExplorerProps> = ({
   onFileDeleted,
 }) => {
-  const [files, setFiles] = useState<File[]>([]);
-  const [activeFilePath, setActiveFilePath] = useState<string | null>(null);
+  const { files, activeFilePath } = useSelector(
+    (state: RootState) => state.fileState
+  );
+  const dispatch = useDispatch();
   const [openFolders, setOpenFolders] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [showOnlySupported, setShowOnlySupported] = useState<boolean>(false);
@@ -35,19 +44,19 @@ export const YandexDiskExplorer: React.FC<YandexDiskExplorerProps> = ({
 
       const yandexApi = new YandexApi();
       const fetchedFiles = await yandexApi.fetchFiles(oauthToken, "/");
-      setFiles(fetchedFiles);
+      dispatch(setFiles(fetchedFiles));
       setLoading(false);
     };
 
     fetchFiles();
-  }, [oauthToken]);
+  }, [oauthToken, dispatch]);
 
   const handleFileClick = useCallback(
     (filePath: string) => {
-      setActiveFilePath(filePath);
+      dispatch(setActiveFilePath(filePath));
       navigate(`/explorer/yandex/${encodeURIComponent(filePath)}`);
     },
-    [navigate]
+    [navigate, dispatch]
   );
 
   const toggleFolder = useCallback((folderPath: string) => {
@@ -106,20 +115,31 @@ export const YandexDiskExplorer: React.FC<YandexDiskExplorerProps> = ({
       setIsDeleting(true); // Start the loading indicator
       const yandexApi = new YandexApi();
       try {
-        await yandexApi.deleteFile(fileToDelete, oauthToken);
-        setFiles((prevFiles) => {
-          const updatedFiles = prevFiles.filter(
-            (file) => file.path !== fileToDelete
-          );
-          console.log("Updated files after deletion:", updatedFiles);
-          return updatedFiles;
-        });
-        if (activeFilePath === fileToDelete) {
-          setActiveFilePath(null);
-          onFileDeleted(); // Notify that a file has been deleted
+        // Fetch the folder contents if it's a directory
+        const folderContents = await yandexApi.fetchFiles(
+          oauthToken,
+          fileToDelete
+        );
+
+        // Delete all files inside the folder
+        for (const file of folderContents) {
+          await yandexApi.deleteFile(file.path, oauthToken);
         }
-        setShowDeleteDialog(false);
-        setFileToDelete(null);
+
+        // Now delete the folder itself
+        const response = await yandexApi.deleteFile(fileToDelete, oauthToken);
+
+        if (response.success) {
+          dispatch(deleteFile(fileToDelete));
+          if (activeFilePath === fileToDelete) {
+            dispatch(setActiveFilePath(null));
+            onFileDeleted(); // Notify that a file has been deleted
+          }
+          setShowDeleteDialog(false); // Close the modal
+          setFileToDelete(null);
+        } else {
+          console.error("Ошибка при удалении файла на сервере");
+        }
       } catch (error) {
         console.error("Ошибка при удалении файла:", error);
       } finally {
@@ -135,40 +155,39 @@ export const YandexDiskExplorer: React.FC<YandexDiskExplorerProps> = ({
 
   const filteredFiles = filterFiles(files);
 
-  useEffect(() => {
-    console.log("Filtered files:", filteredFiles);
-  }, [filteredFiles]);
-
-  if (loading) {
-    return <Loader />;
-  }
-
   return (
     <div className="file-explorer">
-      <h1>Яндекс Диск</h1>
-      <input
-        type="text"
-        placeholder="Поиск файлов..."
-        value={searchQuery}
-        onChange={handleSearchChange}
-        className="search-input"
-      />
-      <label className="checkbox-label">
-        <input
-          type="checkbox"
-          checked={showOnlySupported}
-          onChange={handleCheckboxChange}
-        />
-        Показать только поддерживаемые файлы
-      </label>
-      <FileTree
-        files={filteredFiles}
-        activeFilePath={activeFilePath}
-        onFileClick={handleFileClick}
-        openFolders={openFolders}
-        toggleFolder={toggleFolder}
-        onDeleteFile={handleDeleteFile}
-      />
+      {loading ? (
+        <Loader />
+      ) : (
+        <>
+          <h1>Яндекс Диск</h1>
+          <input
+            type="text"
+            placeholder="Поиск файлов..."
+            value={searchQuery}
+            onChange={handleSearchChange}
+            className="search-input"
+          />
+          <label className="checkbox-label">
+            <input
+              type="checkbox"
+              checked={showOnlySupported}
+              onChange={handleCheckboxChange}
+            />
+            Показать только поддерживаемые файлы
+          </label>
+          <FileTree
+            files={filteredFiles}
+            activeFilePath={activeFilePath}
+            onFileClick={handleFileClick}
+            openFolders={openFolders}
+            toggleFolder={toggleFolder}
+            onDeleteFile={handleDeleteFile}
+            onRenameFile={() => {}}
+          />
+        </>
+      )}
       {showDeleteDialog && (
         <div className="modal">
           <div className="modal-content">
@@ -183,7 +202,6 @@ export const YandexDiskExplorer: React.FC<YandexDiskExplorerProps> = ({
           </div>
         </div>
       )}
-      {isDeleting && <Loader />}
     </div>
   );
 };

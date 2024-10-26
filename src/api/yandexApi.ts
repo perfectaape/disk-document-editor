@@ -145,20 +145,74 @@ export class YandexApi implements IFileAPI {
       throw error;
     }
   }
-  async deleteFile(path: string, oauthToken: string): Promise<void> {
+  async deleteFile(
+    filePath: string,
+    oauthToken: string
+  ): Promise<{ success: boolean }> {
     try {
-      await this.apiClient.delete(`/resources`, {
-        headers: {
-          Authorization: `OAuth ${oauthToken}`,
-        },
-        params: {
-          path: path,
-        },
-      });
-      console.log(`File at path ${path} deleted successfully.`);
+      const response = await axios.delete(
+        `https://cloud-api.yandex.net/v1/disk/resources?path=${encodeURIComponent(
+          filePath
+        )}`,
+        {
+          headers: {
+            Authorization: `OAuth ${oauthToken}`,
+          },
+        }
+      );
+      // Assuming a successful response means the file was deleted
+      return { success: response.status === 204 }; // 204 No Content indicates success
     } catch (error) {
       console.error("Ошибка при удалении файла:", error);
-      throw error;
+      return { success: false };
+    }
+  }
+
+  async renameFile(
+    oldPath: string,
+    newPath: string,
+    oauthToken: string
+  ): Promise<{ success: boolean }> {
+    try {
+      // Шаг 1: Скопируйте файл или папку на новый путь
+      const copyResponse = await this.apiClient.post(
+        `/resources/copy?from=${encodeURIComponent(
+          oldPath
+        )}&path=${encodeURIComponent(newPath)}`,
+        null,
+        {
+          headers: {
+            Authorization: `OAuth ${oauthToken}`,
+          },
+        }
+      );
+
+      if (copyResponse.status !== 201) {
+        throw new Error(
+          "Не удалось скопировать файл или папку для переименования"
+        );
+      }
+
+      // Шаг 2: Удалите оригинальный файл или папку
+      const deleteResponse = await this.apiClient.delete(
+        `/resources?path=${encodeURIComponent(oldPath)}&permanently=true`,
+        {
+          headers: {
+            Authorization: `OAuth ${oauthToken}`,
+          },
+        }
+      );
+
+      if (deleteResponse.status !== 204) {
+        throw new Error(
+          "Не удалось удалить оригинальный файл или папку после копирования"
+        );
+      }
+
+      return { success: true };
+    } catch (error) {
+      console.error("Ошибка при переименовании файла или папки:", error);
+      return { success: false };
     }
   }
 }

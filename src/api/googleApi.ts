@@ -9,6 +9,8 @@ interface GoogleDriveFile {
   id: string;
   name: string;
   mimeType: string;
+  createdTime?: string; // Optional if not always returned
+  modifiedTime?: string; // Optional if not always returned
 }
 
 function transformGoogleFile(file: GoogleDriveFile): File {
@@ -74,24 +76,24 @@ export class GoogleApi implements IFileAPI {
     }
   }
 
-  async fetchFileMetadata(
+  async deleteFile(
     fileId: string,
     oauthToken: string
-  ): Promise<GoogleDriveFile> {
+  ): Promise<{ success: boolean }> {
     try {
-      const response = await this.apiClient.get(`/files/${fileId}`, {
+      await this.apiClient.delete(`/files/${fileId}`, {
         headers: {
           Authorization: `Bearer ${oauthToken}`,
         },
-        params: {
-          fields: "id, name, mimeType",
-        },
       });
-
-      return response.data;
+      console.log(`File with ID ${fileId} deleted successfully.`);
+      return { success: true };
     } catch (error) {
-      console.error("Error fetching file metadata from Google Drive:", error);
-      throw error;
+      console.error("Error deleting file from Google Drive:", error);
+      if (axios.isAxiosError(error) && error.response) {
+        console.error("Google API response:", error.response.data);
+      }
+      return { success: false };
     }
   }
 
@@ -99,7 +101,7 @@ export class GoogleApi implements IFileAPI {
     fileId: string,
     oauthToken: string,
     signal?: AbortSignal
-  ): Promise<string> {
+  ): Promise<string | undefined> {
     try {
       const response = await this.apiClient.get(`/files/${fileId}`, {
         headers: {
@@ -113,12 +115,35 @@ export class GoogleApi implements IFileAPI {
       });
 
       const decoder = new TextDecoder("utf-8");
-      return decoder.decode(response.data);
+      const textContent = decoder.decode(response.data);
+      return textContent;
     } catch (error) {
-      console.error(
-        "Error fetching document content from Google Drive:",
-        error
-      );
+      if (axios.isCancel(error)) {
+        console.log("Request was canceled");
+      } else {
+        console.error(
+          "Error fetching document content from Google Drive:",
+          error
+        );
+      }
+      return undefined;
+    }
+  }
+
+  async fetchFileMetadata(fileId: string, oauthToken: string): Promise<File> {
+    try {
+      const response = await this.apiClient.get(`/files/${fileId}`, {
+        headers: {
+          Authorization: `Bearer ${oauthToken}`,
+        },
+        params: {
+          fields: "id, name, mimeType, createdTime, modifiedTime",
+        },
+      });
+
+      return response.data;
+    } catch (error) {
+      console.error("Error fetching file metadata from Google Drive:", error);
       throw error;
     }
   }
@@ -131,11 +156,7 @@ export class GoogleApi implements IFileAPI {
     try {
       const uploadUrl = `https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`;
 
-      const blob = new Blob([content], {
-        type: "text/plain",
-      });
-
-      await axios.patch(uploadUrl, blob, {
+      await axios.patch(uploadUrl, content, {
         headers: {
           "Content-Type": "text/plain",
           Authorization: `Bearer ${oauthToken}`,
@@ -147,20 +168,25 @@ export class GoogleApi implements IFileAPI {
     }
   }
 
-  async deleteFile(fileId: string, oauthToken: string): Promise<void> {
+  async renameFile(
+    fileId: string,
+    newName: string,
+    oauthToken: string
+  ): Promise<{ success: boolean }> {
     try {
-      await this.apiClient.delete(`/files/${fileId}`, {
-        headers: {
-          Authorization: `Bearer ${oauthToken}`,
-        },
-      });
-      console.log(`File with ID ${fileId} deleted successfully.`);
+      const response = await this.apiClient.patch(
+        `/files/${fileId}`,
+        { name: newName },
+        {
+          headers: {
+            Authorization: `Bearer ${oauthToken}`,
+          },
+        }
+      );
+      return { success: response.status === 200 }; // 200 OK indicates success
     } catch (error) {
-      console.error("Error deleting file from Google Drive:", error);
-      if (axios.isAxiosError(error) && error.response) {
-        console.error("Google API response:", error.response.data);
-      }
-      throw error;
+      console.error("Error renaming file on Google Drive:", error);
+      return { success: false };
     }
   }
 }

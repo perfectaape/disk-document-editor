@@ -8,6 +8,7 @@ interface FileTreeProps {
   openFolders: Set<string>;
   toggleFolder: (folderPath: string) => void;
   onDeleteFile: (filePath: string) => void;
+  onRenameFile: (oldPath: string, newPath: string) => void; // Add this line
 }
 
 const FileTree: React.FC<FileTreeProps> = ({
@@ -17,6 +18,7 @@ const FileTree: React.FC<FileTreeProps> = ({
   openFolders,
   toggleFolder,
   onDeleteFile,
+  onRenameFile, // Add this line
 }) => {
   const [menuFilePath, setMenuFilePath] = useState<string | null>(null);
 
@@ -35,6 +37,7 @@ const FileTree: React.FC<FileTreeProps> = ({
           openFolders={openFolders}
           toggleFolder={toggleFolder}
           onDeleteFile={onDeleteFile}
+          onRenameFile={onRenameFile} // Add this line
           isSupportedFormat={
             file.type === "file" && isSupportedFormat(file.name)
           }
@@ -53,6 +56,7 @@ const FileNode: React.FC<{
   openFolders: Set<string>;
   toggleFolder: (folderPath: string) => void;
   onDeleteFile: (filePath: string) => void;
+  onRenameFile: (oldPath: string, newPath: string) => void; // Add this line
   isSupportedFormat: boolean;
   menuFilePath: string | null;
   setMenuFilePath: (filePath: string | null) => void;
@@ -63,6 +67,7 @@ const FileNode: React.FC<{
   openFolders,
   toggleFolder,
   onDeleteFile,
+  onRenameFile, // Add this line
   isSupportedFormat,
   menuFilePath,
   setMenuFilePath,
@@ -94,9 +99,22 @@ const FileNode: React.FC<{
     (e: React.MouseEvent) => {
       e.stopPropagation();
       onDeleteFile(file.path);
-      setMenuFilePath(null);
+      setMenuFilePath(null); // Close the menu after deletion
     },
     [file.path, onDeleteFile, setMenuFilePath]
+  );
+
+  const handleRenameClick = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      const newName = prompt("Введите новое имя файла:", file.name);
+      if (newName && newName !== file.name) {
+        const newPath = file.path.replace(file.name, newName);
+        onRenameFile(file.path, newPath);
+      }
+      setMenuFilePath(null); // Close the menu after renaming
+    },
+    [file.path, file.name, onRenameFile, setMenuFilePath]
   );
 
   const handleMenuToggle = useCallback(
@@ -144,6 +162,9 @@ const FileNode: React.FC<{
           className="context-menu"
           onClick={(e) => e.stopPropagation()}
         >
+          <div className="context-menu-item" onClick={handleRenameClick}>
+            Переименовать
+          </div>
           <div className="context-menu-item" onClick={handleDeleteClick}>
             Удалить
           </div>
@@ -157,6 +178,7 @@ const FileNode: React.FC<{
           openFolders={openFolders}
           toggleFolder={toggleFolder}
           onDeleteFile={onDeleteFile}
+          onRenameFile={onRenameFile} // Add this line
         />
       )}
     </li>

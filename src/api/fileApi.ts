@@ -1,16 +1,22 @@
 export interface IFileAPI {
   fetchFiles(oauthToken: string, path?: string): Promise<File[]>;
+  deleteFile(path: string, oauthToken: string): Promise<{ success: boolean }>;
   fetchDocumentContent(
     path: string,
     oauthToken: string,
     signal?: AbortSignal
   ): Promise<string | undefined>;
+  fetchFileMetadata(path: string, oauthToken: string): Promise<File>;
   saveDocumentContent(
     path: string,
     oauthToken: string,
     content: string
   ): Promise<void>;
-  deleteFile(path: string, oauthToken: string): Promise<void>;
+  renameFile(
+    fileId: string,
+    newName: string,
+    oauthToken: string
+  ): Promise<{ success: boolean }>;
 }
 
 export interface File {
