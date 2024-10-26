@@ -5,6 +5,7 @@ import {
   setFiles,
   deleteFile,
   setActiveFilePath,
+  renameFile,
 } from "../../store/fileActions";
 import { YandexApi } from "../../api/yandexApi";
 import FileTree from "../FileTree/fileTree";
@@ -31,6 +32,7 @@ export const YandexDiskExplorer: React.FC<YandexDiskExplorerProps> = ({
   const [showDeleteDialog, setShowDeleteDialog] = useState<boolean>(false);
   const [fileToDelete, setFileToDelete] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState<boolean>(false);
+  const [isRenaming, setIsRenaming] = useState<boolean>(false);
   const oauthToken = getCookie("yandex_token");
   const navigate = useNavigate();
 
@@ -148,6 +150,37 @@ export const YandexDiskExplorer: React.FC<YandexDiskExplorerProps> = ({
     }
   };
 
+  const handleRenameFile = async (oldPath: string, newName: string) => {
+    if (!oauthToken) return;
+
+    setIsRenaming(true);
+    const yandexApi = new YandexApi();
+
+    try {
+      const response = await yandexApi.renameFile(oldPath, newName, oauthToken);
+
+      if (response.success) {
+        // Используем Redux action для обновления состояния
+        dispatch(
+          renameFile({
+            oldPath: oldPath,
+            newPath: newName,
+          })
+        );
+
+        // Опционально: можно обновить состояние с сервера
+        // для синхронизации с актуальными данными
+        const updatedFiles = await yandexApi.fetchFiles(oauthToken, "/");
+        dispatch(setFiles(updatedFiles));
+      } else {
+        console.error("Ошибка при переименовании файла");
+      }
+    } catch (error) {
+      console.error("Ошибка при переименовании файла:", error);
+    } finally {
+      setIsRenaming(false);
+    }
+  };
   const cancelDelete = () => {
     setShowDeleteDialog(false);
     setFileToDelete(null);
@@ -157,7 +190,7 @@ export const YandexDiskExplorer: React.FC<YandexDiskExplorerProps> = ({
 
   return (
     <div className="file-explorer">
-      {loading ? (
+      {loading || isRenaming ? (
         <Loader />
       ) : (
         <>
@@ -184,7 +217,7 @@ export const YandexDiskExplorer: React.FC<YandexDiskExplorerProps> = ({
             openFolders={openFolders}
             toggleFolder={toggleFolder}
             onDeleteFile={handleDeleteFile}
-            onRenameFile={() => {}}
+            onRenameFile={handleRenameFile} // Pass the rename handler
           />
         </>
       )}

@@ -23,6 +23,7 @@ const updateItemPathRecursively = (
   newPath: string
 ): File[] => {
   return items.map((item) => {
+    console.log("item.path", item.path);
     if (item.path === oldPath) {
       return { ...item, path: newPath };
     }

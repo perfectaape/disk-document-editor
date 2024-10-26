@@ -1,10 +1,10 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { GoogleApi } from "../../api/googleApi";
 import FileTree from "../FileTree/fileTree";
 import { File, getCookie } from "../../api/fileApi";
 import Loader from "../../components/Loader/loader";
-import "./fileExplorer.css";
 import { useNavigate } from "react-router-dom";
+import "./fileExplorer.css";
 
 interface GoogleDriveExplorerProps {
   onFileDeleted: () => void;
@@ -16,31 +16,35 @@ export const GoogleDriveExplorer: React.FC<GoogleDriveExplorerProps> = ({
   const [files, setFiles] = useState<File[]>([]);
   const [activeFilePath, setActiveFilePath] = useState<string | null>(null);
   const [openFolders, setOpenFolders] = useState<Set<string>>(new Set());
-  const [searchQuery, setSearchQuery] = useState<string>("");
-  const [showOnlySupported, setShowOnlySupported] = useState<boolean>(false);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [showDeleteDialog, setShowDeleteDialog] = useState<boolean>(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [showOnlySupported, setShowOnlySupported] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [fileToDelete, setFileToDelete] = useState<string | null>(null);
-  const [isDeleting, setIsDeleting] = useState<boolean>(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isRenaming, setIsRenaming] = useState(false);
+
   const oauthToken = getCookie("google_token");
   const navigate = useNavigate();
+  const googleApi = useMemo(() => new GoogleApi(), []);
 
-  useEffect(() => {
-    const fetchFiles = async () => {
-      if (!oauthToken) {
-        console.error("OAuth token is missing");
-        setLoading(false);
-        return;
-      }
+  const fetchFiles = useCallback(async () => {
+    if (!oauthToken) {
+      setLoading(false);
+      return;
+    }
 
-      const googleApi = new GoogleApi();
+    try {
       const fetchedFiles = await googleApi.fetchFiles(oauthToken, "root");
       setFiles(fetchedFiles);
+    } finally {
       setLoading(false);
-    };
+    }
+  }, [googleApi, oauthToken]);
 
+  useEffect(() => {
     fetchFiles();
-  }, [oauthToken]);
+  }, [fetchFiles]);
 
   const handleFileClick = useCallback(
     (fileId: string) => {
@@ -62,104 +66,121 @@ export const GoogleDriveExplorer: React.FC<GoogleDriveExplorerProps> = ({
     });
   }, []);
 
-  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setSearchQuery(e.target.value.toLowerCase());
-  };
+  const isSupportedFormat = useCallback(
+    (fileName: string, mimeType: string) => {
+      return mimeType === "text/plain" || fileName.endsWith(".txt");
+    },
+    []
+  );
 
-  const handleCheckboxChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setShowOnlySupported(e.target.checked);
-  };
-
-  const isSupportedFormat = (fileName: string, mimeType: string) => {
-    return mimeType === "text/plain" || fileName.endsWith(".txt");
-  };
-
-  const filterFiles = (files: File[]): File[] => {
-    return files
-      .map((file) => {
-        if (file.type === "dir") {
-          const filteredChildren = filterFiles(file.children || []);
-          if (
-            filteredChildren.length > 0 ||
-            file.name.toLowerCase().includes(searchQuery)
+  const filterFiles = useCallback(
+    (files: File[]): File[] => {
+      return files
+        .map((file) => {
+          if (file.type === "dir") {
+            const filteredChildren = filterFiles(file.children || []);
+            if (
+              filteredChildren.length > 0 ||
+              file.name.toLowerCase().includes(searchQuery)
+            ) {
+              return { ...file, children: filteredChildren };
+            }
+          } else if (
+            file.name.toLowerCase().includes(searchQuery) &&
+            (!showOnlySupported || isSupportedFormat(file.name, file.mime_type))
           ) {
-            return { ...file, children: filteredChildren };
+            return file;
           }
-        } else if (
-          file.name.toLowerCase().includes(searchQuery) &&
-          (!showOnlySupported || isSupportedFormat(file.name, file.mime_type))
-        ) {
-          return file;
-        }
-        return undefined;
-      })
-      .filter((file): file is File => file !== undefined);
-  };
+          return undefined;
+        })
+        .filter((file): file is File => file !== undefined);
+    },
+    [searchQuery, showOnlySupported, isSupportedFormat]
+  );
 
-  const handleDeleteFile = (fileId: string) => {
+  const handleDeleteFile = useCallback((fileId: string) => {
     setFileToDelete(fileId);
     setShowDeleteDialog(true);
-  };
+  }, []);
 
-  const confirmDelete = async () => {
-    if (fileToDelete && oauthToken) {
-      setIsDeleting(true); // Start the loading indicator
-      const googleApi = new GoogleApi();
+  const handleRenameFile = useCallback(
+    async (fileId: string, newName: string) => {
+      if (!oauthToken || isRenaming) return;
+
+      setIsRenaming(true);
       try {
-        // Fetch the folder contents if it's a directory
-        const folderContents = await googleApi.fetchFiles(
-          oauthToken,
-          fileToDelete
+        const response = await googleApi.renameFile(
+          fileId,
+          newName,
+          oauthToken
         );
-
-        // Delete all files inside the folder
-        for (const file of folderContents) {
-          await googleApi.deleteFile(file.path, oauthToken);
+        if (response.success) {
+          await fetchFiles();
         }
-
-        // Now delete the folder itself
-        await googleApi.deleteFile(fileToDelete, oauthToken);
-
-        setFiles((prevFiles) =>
-          prevFiles.filter((file) => file.path !== fileToDelete)
-        );
-        if (activeFilePath === fileToDelete) {
-          setActiveFilePath(null);
-          onFileDeleted(); // Notify that a file has been deleted
-        }
-        setShowDeleteDialog(false);
-        setFileToDelete(null);
-      } catch (error) {
-        console.error("Ошибка при удалении файла:", error);
       } finally {
-        setIsDeleting(false); // Stop the loading indicator
+        setIsRenaming(false);
       }
-    }
-  };
+    },
+    [oauthToken, isRenaming, googleApi, fetchFiles]
+  );
 
-  const cancelDelete = () => {
+  const confirmDelete = useCallback(async () => {
+    if (!fileToDelete || !oauthToken) return;
+
+    setIsDeleting(true);
+    try {
+      const folderContents = await googleApi.fetchFiles(
+        oauthToken,
+        fileToDelete
+      );
+
+      await Promise.all(
+        folderContents.map((file) =>
+          googleApi.deleteFile(file.path, oauthToken)
+        )
+      );
+
+      await googleApi.deleteFile(fileToDelete, oauthToken);
+
+      setFiles((prevFiles) =>
+        prevFiles.filter((file) => file.path !== fileToDelete)
+      );
+
+      if (activeFilePath === fileToDelete) {
+        setActiveFilePath(null);
+        onFileDeleted();
+      }
+
+      setShowDeleteDialog(false);
+      setFileToDelete(null);
+    } finally {
+      setIsDeleting(false);
+    }
+  }, [fileToDelete, oauthToken, googleApi, activeFilePath, onFileDeleted]);
+
+  const cancelDelete = useCallback(() => {
     setShowDeleteDialog(false);
     setFileToDelete(null);
-  };
+  }, []);
 
   const filteredFiles = filterFiles(files);
 
   return (
     <div className="file-explorer">
-      {loading && <Loader />} {/* Show loader only when loading files */}
+      {loading && <Loader />}
       <h1>Google Drive</h1>
       <input
         type="text"
         placeholder="Поиск файлов..."
         value={searchQuery}
-        onChange={handleSearchChange}
+        onChange={(e) => setSearchQuery(e.target.value.toLowerCase())}
         className="search-input"
       />
       <label className="checkbox-label">
         <input
           type="checkbox"
           checked={showOnlySupported}
-          onChange={handleCheckboxChange}
+          onChange={(e) => setShowOnlySupported(e.target.checked)}
         />
         Показать только поддерживаемые файлы
       </label>
@@ -170,6 +191,7 @@ export const GoogleDriveExplorer: React.FC<GoogleDriveExplorerProps> = ({
         openFolders={openFolders}
         toggleFolder={toggleFolder}
         onDeleteFile={handleDeleteFile}
+        onRenameFile={handleRenameFile}
       />
       {showDeleteDialog && (
         <div className="modal">

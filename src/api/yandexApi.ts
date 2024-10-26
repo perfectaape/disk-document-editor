@@ -174,7 +174,7 @@ export class YandexApi implements IFileAPI {
     oauthToken: string
   ): Promise<{ success: boolean }> {
     try {
-      // Шаг 1: Скопируйте файл или папку на новый путь
+      // Шаг 1: Копируем файл или папку
       const copyResponse = await this.apiClient.post(
         `/resources/copy?from=${encodeURIComponent(
           oldPath
@@ -187,15 +187,17 @@ export class YandexApi implements IFileAPI {
         }
       );
 
-      if (copyResponse.status !== 201) {
-        throw new Error(
-          "Не удалось скопировать файл или папку для переименования"
-        );
+      // Проверяем, получили ли мы ссылку на операцию
+      if (copyResponse.status === 202 && copyResponse.data.href) {
+        // Ждем завершения операции копирования
+        await this.waitForOperation(copyResponse.data.href, oauthToken);
+      } else if (copyResponse.status !== 201) {
+        throw new Error("Не удалось скопировать файл или папку");
       }
 
-      // Шаг 2: Удалите оригинальный файл или папку
+      // Шаг 2: Удаляем оригинал
       const deleteResponse = await this.apiClient.delete(
-        `/resources?path=${encodeURIComponent(oldPath)}&permanently=true`,
+        `/resources?path=${encodeURIComponent(oldPath)}`,
         {
           headers: {
             Authorization: `OAuth ${oauthToken}`,
@@ -203,16 +205,54 @@ export class YandexApi implements IFileAPI {
         }
       );
 
-      if (deleteResponse.status !== 204) {
-        throw new Error(
-          "Не удалось удалить оригинальный файл или папку после копирования"
-        );
+      // Проверяем, получили ли мы ссылку на операцию удаления
+      if (deleteResponse.status === 202 && deleteResponse.data.href) {
+        // Ждем завершения операции удаления
+        await this.waitForOperation(deleteResponse.data.href, oauthToken);
+      } else if (deleteResponse.status !== 204) {
+        throw new Error("Не удалось удалить оригинальный файл или папку");
       }
 
       return { success: true };
     } catch (error) {
-      console.error("Ошибка при переименовании файла или папки:", error);
+      console.error("Ошибка при переименовании:", error);
       return { success: false };
     }
+  }
+
+  // Добавляем новый метод для ожидания завершения операции
+  private async waitForOperation(
+    operationHref: string,
+    oauthToken: string,
+    maxAttempts: number = 10
+  ): Promise<void> {
+    let attempts = 0;
+
+    while (attempts < maxAttempts) {
+      try {
+        const response = await axios.get(operationHref, {
+          headers: {
+            Authorization: `OAuth ${oauthToken}`,
+          },
+        });
+
+        if (response.data.status === "success") {
+          return;
+        } else if (response.data.status === "failed") {
+          throw new Error("Операция завершилась с ошибкой");
+        }
+
+        // Ждем 1 секунду перед следующей проверкой
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        attempts++;
+      } catch (error) {
+        console.error("Ошибка при проверке статуса операции:", error);
+        throw error;
+      }
+    }
+
+    throw new Error(
+      "Превышено максимальное количество попыток проверки статуса операции"
+    );
   }
 }
