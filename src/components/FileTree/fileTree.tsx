@@ -71,7 +71,6 @@ const FileNode: React.FC<{
   const isActive = activeFilePath === file.path;
   const nodeRef = useRef<HTMLLIElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -91,23 +90,19 @@ const FileNode: React.FC<{
     };
   }, [setMenuFilePath]);
 
-  const handleDeleteClick = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation();
-    setIsModalOpen(true);
-  }, []);
-
-  const confirmDelete = useCallback(() => {
-    console.log("Delete confirmed for:", file.path);
-    onDeleteFile(file.path);
-    setMenuFilePath(null);
-    setIsModalOpen(false);
-  }, [file.path, onDeleteFile, setMenuFilePath]);
+  const handleDeleteClick = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      onDeleteFile(file.path);
+      setMenuFilePath(null);
+    },
+    [file.path, onDeleteFile, setMenuFilePath]
+  );
 
   const handleMenuToggle = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation();
       e.preventDefault();
-      console.log(`Toggling menu for: ${file.path}`);
       setMenuFilePath(menuFilePath === file.path ? null : file.path);
     },
     [file.path, menuFilePath, setMenuFilePath]
@@ -151,15 +146,6 @@ const FileNode: React.FC<{
         >
           <div className="context-menu-item" onClick={handleDeleteClick}>
             Удалить
-          </div>
-        </div>
-      )}
-      {isModalOpen && (
-        <div className="modal">
-          <div className="modal-content">
-            <p>Вы уверены, что хотите удалить этот файл?</p>
-            <button onClick={confirmDelete}>Да</button>
-            <button onClick={() => setIsModalOpen(false)}>Нет</button>
           </div>
         </div>
       )}

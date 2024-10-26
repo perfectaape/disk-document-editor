@@ -8,7 +8,11 @@ import { getCookie } from "../../api/fileApi";
 import Loader from "../../components/Loader/loader";
 import { AxiosError } from "axios";
 
-export const Editor: React.FC = React.memo(() => {
+interface EditorProps {
+  isFileDeleted: boolean;
+}
+
+export const Editor: React.FC<EditorProps> = React.memo(({ isFileDeleted }) => {
   const { service, filePath } = useParams<{
     service: "yandex" | "google";
     filePath?: string;
@@ -109,7 +113,7 @@ export const Editor: React.FC = React.memo(() => {
   const handleSaveDocument = useCallback(
     async (text: string) => {
       const token = checkToken();
-      if (!token) return;
+      if (!token || isFileDeleted) return;
 
       setSaving(true);
       try {
@@ -129,7 +133,7 @@ export const Editor: React.FC = React.memo(() => {
         setSaving(false);
       }
     },
-    [filePath, checkToken, service, yandexApi, googleApi]
+    [filePath, checkToken, service, yandexApi, googleApi, isFileDeleted]
   );
 
   const debouncedSaveDocument = useMemo(
@@ -170,7 +174,7 @@ export const Editor: React.FC = React.memo(() => {
   }
 
   return (
-    <div className="container">
+    <div className={`container ${isFileDeleted ? "editor-disabled" : ""}`}>
       <button onClick={handleClose} className="close-button">
         Закрыть
       </button>
@@ -181,9 +185,14 @@ export const Editor: React.FC = React.memo(() => {
         onChange={handleChange}
         rows={10}
         cols={50}
+        disabled={isFileDeleted}
       />
       {saving && <div className="loading-indicator"></div>}
-      <button className="start-btn" onClick={() => handleSaveDocument(content)}>
+      <button
+        className="start-btn"
+        onClick={() => handleSaveDocument(content)}
+        disabled={isFileDeleted}
+      >
         Сохранить
       </button>
     </div>

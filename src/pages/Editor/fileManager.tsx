@@ -13,7 +13,8 @@ export const FileManager: React.FC = () => {
     filePath?: string;
   }>();
   const [showModal, setShowModal] = useState<boolean>(false);
-  const [loading, setLoading] = useState<boolean>(true); // Добавлено состояние загрузки
+  const [loading, setLoading] = useState<boolean>(true);
+  const [isFileDeleted, setIsFileDeleted] = useState<boolean>(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -50,6 +51,16 @@ export const FileManager: React.FC = () => {
     window.location.href = authUrl;
   };
 
+  const handleFileDeleted = () => {
+    setIsFileDeleted(true);
+  };
+
+  useEffect(() => {
+    if (filePath) {
+      setIsFileDeleted(false); // Reset the deleted state when a new file is opened
+    }
+  }, [filePath]);
+
   if (loading) {
     return <Loader />;
   }
@@ -73,14 +84,14 @@ export const FileManager: React.FC = () => {
       )}
       <div className="explorer-container">
         {service === "google" ? (
-          <GoogleDriveExplorer />
+          <GoogleDriveExplorer onFileDeleted={handleFileDeleted} />
         ) : (
-          <YandexDiskExplorer />
+          <YandexDiskExplorer onFileDeleted={handleFileDeleted} />
         )}
       </div>
       <div>
         {filePath ? (
-          <Editor />
+          <Editor isFileDeleted={isFileDeleted} />
         ) : (
           <div className="select-file-message">
             Выберите файл для редактирования

@@ -6,7 +6,13 @@ import Loader from "../../components/Loader/loader";
 import "./fileExplorer.css";
 import { useNavigate } from "react-router-dom";
 
-export const GoogleDriveExplorer: React.FC = () => {
+interface GoogleDriveExplorerProps {
+  onFileDeleted: () => void;
+}
+
+export const GoogleDriveExplorer: React.FC<GoogleDriveExplorerProps> = ({
+  onFileDeleted,
+}) => {
   const [files, setFiles] = useState<File[]>([]);
   const [activeFilePath, setActiveFilePath] = useState<string | null>(null);
   const [openFolders, setOpenFolders] = useState<Set<string>>(new Set());
@@ -15,6 +21,7 @@ export const GoogleDriveExplorer: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(true);
   const [showDeleteDialog, setShowDeleteDialog] = useState<boolean>(false);
   const [fileToDelete, setFileToDelete] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState<boolean>(false);
   const oauthToken = getCookie("google_token");
   const navigate = useNavigate();
 
@@ -96,16 +103,23 @@ export const GoogleDriveExplorer: React.FC = () => {
 
   const confirmDelete = async () => {
     if (fileToDelete && oauthToken) {
+      setIsDeleting(true); // Start the loading indicator
       const googleApi = new GoogleApi();
       try {
         await googleApi.deleteFile(fileToDelete, oauthToken);
         setFiles((prevFiles) =>
           prevFiles.filter((file) => file.path !== fileToDelete)
         );
+        if (activeFilePath === fileToDelete) {
+          setActiveFilePath(null);
+          onFileDeleted(); // Notify that a file has been deleted
+        }
         setShowDeleteDialog(false);
         setFileToDelete(null);
       } catch (error) {
         console.error("Ошибка при удалении файла:", error);
+      } finally {
+        setIsDeleting(false); // Stop the loading indicator
       }
     }
   };
@@ -152,11 +166,16 @@ export const GoogleDriveExplorer: React.FC = () => {
           <div className="modal-content">
             <h2>Подтверждение удаления</h2>
             <p>Вы уверены, что хотите удалить этот файл?</p>
-            <button onClick={confirmDelete}>Удалить</button>
-            <button onClick={cancelDelete}>Отмена</button>
+            <button onClick={confirmDelete} disabled={isDeleting}>
+              {isDeleting ? "Удаление..." : "Удалить"}
+            </button>
+            <button onClick={cancelDelete} disabled={isDeleting}>
+              Отмена
+            </button>
           </div>
         </div>
       )}
+      {isDeleting && <Loader />} {/* Show loader during deletion */}
     </div>
   );
 };
