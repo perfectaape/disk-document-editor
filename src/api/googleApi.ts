@@ -146,57 +146,59 @@ export class GoogleApi implements IFileAPI {
       },
     });
   }
-
   async renameFile(
     fileId: string,
     newName: string,
     oauthToken: string
   ): Promise<{ success: boolean }> {
-    const response = await this.apiClient.patch<GoogleDriveFileMetadata>(
-      `/files/${fileId}`,
-      { name: newName },
-      {
-        headers: {
-          Authorization: `Bearer ${oauthToken}`,
+    try {
+      const response = await this.apiClient.patch<GoogleDriveFileMetadata>(
+        `/files/${fileId}`,
+        {
+          name: newName,
         },
-        params: {
-          fields: "id, name, mimeType, createdTime, modifiedTime",
-        },
-      }
-    );
-
-    if (
-      (response.data as unknown as GoogleDriveOperation).status === "pending"
-    ) {
-      await this.waitForOperation(response.data.id, oauthToken);
-    }
-
-    if (response.data.mimeType === "application/vnd.google-apps.folder") {
-      const filesInFolder = await this.apiClient.get<GoogleDriveFileList>(
-        "/files",
         {
           headers: {
             Authorization: `Bearer ${oauthToken}`,
+            "Content-Type": "application/json; charset=utf-8",
+            Accept: "application/json",
           },
           params: {
-            q: `'${fileId}' in parents and trashed = false`,
-            fields: "files(id, name, mimeType, parents)",
+            fields: "id, name, mimeType",
           },
         }
       );
 
-      if (filesInFolder.data.files) {
-        await Promise.all(
-          filesInFolder.data.files.map((file) =>
-            this.updateFileMetadata(file.id, oauthToken)
-          )
+      // Для папок обновляем вложенные файлы
+      if (response.data.mimeType === "application/vnd.google-apps.folder") {
+        const filesInFolder = await this.apiClient.get<GoogleDriveFileList>(
+          "/files",
+          {
+            headers: {
+              Authorization: `Bearer ${oauthToken}`,
+            },
+            params: {
+              q: `'${fileId}' in parents and trashed = false`,
+              fields: "files(id, name, mimeType, parents)",
+            },
+          }
         );
+
+        if (filesInFolder.data.files) {
+          await Promise.all(
+            filesInFolder.data.files.map((file) =>
+              this.updateFileMetadata(file.id, oauthToken)
+            )
+          );
+        }
       }
+
+      return { success: true };
+    } catch (error) {
+      console.error("Error in renameFile:", error);
+      return { success: false };
     }
-
-    return { success: response.status === 200 };
   }
-
   private async waitForOperation(
     operationId: string,
     oauthToken: string,

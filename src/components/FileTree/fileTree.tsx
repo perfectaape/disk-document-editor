@@ -8,7 +8,7 @@ interface FileTreeProps {
   openFolders: Set<string>;
   toggleFolder: (folderPath: string) => void;
   onDeleteFile: (filePath: string) => void;
-  onRenameFile: (oldPath: string, newPath: string) => void; // Add this line
+  onRenameFile: (oldPath: string, newPath: string) => void;
 }
 
 const FileTree: React.FC<FileTreeProps> = ({
@@ -18,7 +18,7 @@ const FileTree: React.FC<FileTreeProps> = ({
   openFolders,
   toggleFolder,
   onDeleteFile,
-  onRenameFile, // Add this line
+  onRenameFile,
 }) => {
   const [menuFilePath, setMenuFilePath] = useState<string | null>(null);
 
@@ -37,7 +37,7 @@ const FileTree: React.FC<FileTreeProps> = ({
           openFolders={openFolders}
           toggleFolder={toggleFolder}
           onDeleteFile={onDeleteFile}
-          onRenameFile={onRenameFile} // Add this line
+          onRenameFile={onRenameFile}
           isSupportedFormat={
             file.type === "file" && isSupportedFormat(file.name)
           }
@@ -56,7 +56,7 @@ const FileNode: React.FC<{
   openFolders: Set<string>;
   toggleFolder: (folderPath: string) => void;
   onDeleteFile: (filePath: string) => void;
-  onRenameFile: (oldPath: string, newPath: string) => void; // Add this line
+  onRenameFile: (oldPath: string, newPath: string) => void;
   isSupportedFormat: boolean;
   menuFilePath: string | null;
   setMenuFilePath: (filePath: string | null) => void;
@@ -67,7 +67,7 @@ const FileNode: React.FC<{
   openFolders,
   toggleFolder,
   onDeleteFile,
-  onRenameFile, // Add this line
+  onRenameFile,
   isSupportedFormat,
   menuFilePath,
   setMenuFilePath,
@@ -99,7 +99,7 @@ const FileNode: React.FC<{
     (e: React.MouseEvent) => {
       e.stopPropagation();
       onDeleteFile(file.path);
-      setMenuFilePath(null); // Close the menu after deletion
+      setMenuFilePath(null);
     },
     [file.path, onDeleteFile, setMenuFilePath]
   );
@@ -109,10 +109,9 @@ const FileNode: React.FC<{
       e.stopPropagation();
       const newName = prompt("Введите новое имя файла:", file.name);
       if (newName && newName !== file.name) {
-        const newPath = file.path.replace(file.name, newName);
-        onRenameFile(file.path, newPath);
+        onRenameFile(file.path, newName);
       }
-      setMenuFilePath(null); // Close the menu after renaming
+      setMenuFilePath(null);
     },
     [file.path, file.name, onRenameFile, setMenuFilePath]
   );
@@ -178,7 +177,7 @@ const FileNode: React.FC<{
           openFolders={openFolders}
           toggleFolder={toggleFolder}
           onDeleteFile={onDeleteFile}
-          onRenameFile={onRenameFile} // Add this line
+          onRenameFile={onRenameFile}
         />
       )}
     </li>

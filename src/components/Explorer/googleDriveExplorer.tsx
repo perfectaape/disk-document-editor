@@ -114,14 +114,18 @@ export const GoogleDriveExplorer: React.FC<GoogleDriveExplorerProps> = ({
           newName,
           oauthToken
         );
+
         if (response.success) {
-          await fetchFiles();
+          const updatedFiles = await googleApi.fetchFiles(oauthToken, "root");
+          setFiles(updatedFiles);
         }
+      } catch (error) {
+        console.error("Error renaming file:", error);
       } finally {
         setIsRenaming(false);
       }
     },
-    [oauthToken, isRenaming, googleApi, fetchFiles]
+    [oauthToken, isRenaming, googleApi]
   );
 
   const confirmDelete = useCallback(async () => {
@@ -167,32 +171,37 @@ export const GoogleDriveExplorer: React.FC<GoogleDriveExplorerProps> = ({
 
   return (
     <div className="file-explorer">
-      {loading && <Loader />}
-      <h1>Google Drive</h1>
-      <input
-        type="text"
-        placeholder="Поиск файлов..."
-        value={searchQuery}
-        onChange={(e) => setSearchQuery(e.target.value.toLowerCase())}
-        className="search-input"
-      />
-      <label className="checkbox-label">
-        <input
-          type="checkbox"
-          checked={showOnlySupported}
-          onChange={(e) => setShowOnlySupported(e.target.checked)}
-        />
-        Показать только поддерживаемые файлы
-      </label>
-      <FileTree
-        files={filteredFiles}
-        activeFilePath={activeFilePath}
-        onFileClick={handleFileClick}
-        openFolders={openFolders}
-        toggleFolder={toggleFolder}
-        onDeleteFile={handleDeleteFile}
-        onRenameFile={handleRenameFile}
-      />
+      {loading || isRenaming ? (
+        <Loader />
+      ) : (
+        <>
+          <h1>Google Drive</h1>
+          <input
+            type="text"
+            placeholder="Поиск файлов..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value.toLowerCase())}
+            className="search-input"
+          />
+          <label className="checkbox-label">
+            <input
+              type="checkbox"
+              checked={showOnlySupported}
+              onChange={(e) => setShowOnlySupported(e.target.checked)}
+            />
+            Показать только поддерживаемые файлы
+          </label>
+          <FileTree
+            files={filteredFiles}
+            activeFilePath={activeFilePath}
+            onFileClick={handleFileClick}
+            openFolders={openFolders}
+            toggleFolder={toggleFolder}
+            onDeleteFile={handleDeleteFile}
+            onRenameFile={handleRenameFile}
+          />
+        </>
+      )}
       {showDeleteDialog && (
         <div className="modal">
           <div className="modal-content">
