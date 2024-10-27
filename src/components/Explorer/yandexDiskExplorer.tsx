@@ -10,6 +10,7 @@ import { YandexApi } from "../../api/yandexApi";
 import FileTree from "../FileTree/fileTree";
 import { File, getCookie } from "../../api/fileApi";
 import Loader from "../../components/Loader/loader";
+import ExitBtn from "../../components/LogoutButton/exitBtn";
 import "./fileExplorer.css";
 import { useNavigate } from "react-router-dom";
 
@@ -125,7 +126,8 @@ export const YandexDiskExplorer: React.FC<YandexDiskExplorerProps> = ({
           }
           return (
             matchesSearchQuery &&
-            (!showOnlySupported || isSupportedFormat(file.name, file.mime_type || ""))
+            (!showOnlySupported ||
+              isSupportedFormat(file.name, file.mime_type || ""))
           );
         });
     },
@@ -316,7 +318,10 @@ export const YandexDiskExplorer: React.FC<YandexDiskExplorerProps> = ({
         <Loader />
       ) : (
         <>
-          <h1>Яндекс Диск</h1>
+          <div className="header">
+            <h1>Яндекс Диск</h1>
+            <ExitBtn />
+          </div>
           <input
             type="text"
             placeholder="Поиск файлов..."

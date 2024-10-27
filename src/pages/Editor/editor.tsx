@@ -7,6 +7,7 @@ import "./editor.css";
 import { getCookie } from "../../api/fileApi";
 import Loader from "../../components/Loader/loader";
 import { AxiosError } from "axios";
+import FileInfoPanel from "./fileInfoPanel";
 
 interface EditorProps {
   isFileDeleted: boolean;
@@ -21,6 +22,11 @@ export const Editor: React.FC<EditorProps> = React.memo(({ isFileDeleted }) => {
   const [saving, setSaving] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(true);
   const [unsupportedFormat, setUnsupportedFormat] = useState<boolean>(false);
+  const [fileInfo, setFileInfo] = useState<{
+    createdDate: string;
+    modifiedDate: string;
+    author: string;
+  } | null>(null);
   const navigate = useNavigate();
   const yandexApi = useMemo(() => new YandexApi(), []);
   const googleApi = useMemo(() => new GoogleApi(), []);
@@ -70,6 +76,11 @@ export const Editor: React.FC<EditorProps> = React.memo(({ isFileDeleted }) => {
 
         if (content !== undefined) {
           setContent(content);
+          setFileInfo({
+            createdDate: fileMetadata.createdDate,
+            modifiedDate: fileMetadata.modifiedDate,
+            author: fileMetadata.author || "Неизвестно",
+          });
         } else {
           console.error("Получено пустое содержимое документа");
           alert(
@@ -179,14 +190,23 @@ export const Editor: React.FC<EditorProps> = React.memo(({ isFileDeleted }) => {
         Закрыть
       </button>
       <h1>Содержимое документа</h1>
-      <textarea
-        className="textarea-editor"
-        value={content}
-        onChange={handleChange}
-        rows={10}
-        cols={50}
-        disabled={isFileDeleted}
-      />
+      <div className="editor-content">
+        <textarea
+          className="textarea-editor"
+          value={content}
+          onChange={handleChange}
+          rows={10}
+          cols={50}
+          disabled={isFileDeleted}
+        />
+        {fileInfo && (
+          <FileInfoPanel
+            createdDate={fileInfo.createdDate}
+            modifiedDate={fileInfo.modifiedDate}
+            author={fileInfo.author}
+          />
+        )}
+      </div>
       {saving && <div className="loading-indicator"></div>}
       <button
         className="start-btn"

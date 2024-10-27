@@ -3,6 +3,7 @@ import { GoogleApi } from "../../api/googleApi";
 import FileTree from "../FileTree/fileTree";
 import { File, getCookie } from "../../api/fileApi";
 import Loader from "../../components/Loader/loader";
+import ExitBtn from "../../components/LogoutButton/exitBtn";
 import { useNavigate } from "react-router-dom";
 import "./fileExplorer.css";
 
@@ -93,13 +94,15 @@ export const GoogleDriveExplorer: React.FC<GoogleDriveExplorerProps> = ({
             const filteredChildren = filterFiles(file.children || []);
             if (
               filteredChildren.length > 0 ||
-              (!showOnlySupported && file.name.toLowerCase().includes(searchQuery))
+              (!showOnlySupported &&
+                file.name.toLowerCase().includes(searchQuery))
             ) {
               return { ...file, children: filteredChildren };
             }
           } else if (
             file.name.toLowerCase().includes(searchQuery) &&
-            (!showOnlySupported || isSupportedFormat(file.name, file.mimeType || ""))
+            (!showOnlySupported ||
+              isSupportedFormat(file.name, file.mimeType || ""))
           ) {
             return file;
           }
@@ -266,7 +269,10 @@ export const GoogleDriveExplorer: React.FC<GoogleDriveExplorerProps> = ({
         <Loader />
       ) : (
         <>
-          <h1>Google Drive</h1>
+          <div className="header">
+            <h1>Google Drive</h1>
+            <ExitBtn />
+          </div>
           <input
             type="text"
             placeholder="Поиск файлов..."
