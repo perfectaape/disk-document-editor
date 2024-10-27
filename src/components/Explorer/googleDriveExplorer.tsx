@@ -27,7 +27,7 @@ export const GoogleDriveExplorer: React.FC<GoogleDriveExplorerProps> = ({
   const [isDeleting, setIsDeleting] = useState(false);
   const [isRenaming, setIsRenaming] = useState(false);
   const [isMoving, setIsMoving] = useState(false);
-  const [isCreating, setIsCreating] = useState(false); // Новое состояние для загрузки при создании
+  const [isCreating, setIsCreating] = useState(false);
 
   const oauthToken = getCookie("google_token");
   const navigate = useNavigate();
@@ -51,7 +51,6 @@ export const GoogleDriveExplorer: React.FC<GoogleDriveExplorerProps> = ({
     fetchFiles();
   }, [fetchFiles]);
 
-  // Сохраняем состояние открытых папок при изменении
   useEffect(() => {
     localStorage.setItem(
       "googleOpenFolders",
@@ -94,7 +93,7 @@ export const GoogleDriveExplorer: React.FC<GoogleDriveExplorerProps> = ({
             const filteredChildren = filterFiles(file.children || []);
             if (
               filteredChildren.length > 0 ||
-              file.name.toLowerCase().includes(searchQuery)
+              (!showOnlySupported && file.name.toLowerCase().includes(searchQuery))
             ) {
               return { ...file, children: filteredChildren };
             }
@@ -168,11 +167,11 @@ export const GoogleDriveExplorer: React.FC<GoogleDriveExplorerProps> = ({
 
       const folderName = prompt("Введите имя новой папки:");
       if (folderName) {
-        setIsCreating(true); // Включаем индикатор загрузки
+        setIsCreating(true);
         try {
           const path = `${
             parentId === "disk:/" ? "root" : parentId
-          }/${folderName}`; // Используем "root" для корня
+          }/${folderName}`;
           const response = await googleApi.createFolder(path, oauthToken);
           if (response.success) {
             const updatedFiles = await googleApi.fetchFiles(oauthToken, "root");
@@ -183,7 +182,7 @@ export const GoogleDriveExplorer: React.FC<GoogleDriveExplorerProps> = ({
         } catch (error) {
           console.error("Ошибка при создании папки:", error);
         } finally {
-          setIsCreating(false); // Отключаем индикатор загрузки
+          setIsCreating(false);
         }
       }
     },
@@ -196,11 +195,11 @@ export const GoogleDriveExplorer: React.FC<GoogleDriveExplorerProps> = ({
 
       const fileName = prompt("Введите имя нового файла (.txt):");
       if (fileName && fileName.endsWith(".txt")) {
-        setIsCreating(true); // Включаем индикатор загрузки
+        setIsCreating(true);
         try {
           const path = `${
             parentId === "disk:/" ? "root" : parentId
-          }/${fileName}`; // Используем "root" для корня
+          }/${fileName}`;
           const response = await googleApi.createFile(path, oauthToken);
           if (response.success) {
             const updatedFiles = await googleApi.fetchFiles(oauthToken, "root");
@@ -211,7 +210,7 @@ export const GoogleDriveExplorer: React.FC<GoogleDriveExplorerProps> = ({
         } catch (error) {
           console.error("Ошибка при создании файла:", error);
         } finally {
-          setIsCreating(false); // Отключаем индикатор загрузки
+          setIsCreating(false);
         }
       } else {
         alert("Имя файла должно заканчиваться на .txt");

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { RootState } from "../../store/store";
 import {
@@ -35,28 +35,29 @@ export const YandexDiskExplorer: React.FC<YandexDiskExplorerProps> = ({
   const [fileToDelete, setFileToDelete] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState<boolean>(false);
   const [isRenaming, setIsRenaming] = useState<boolean>(false);
-  const [isCreating, setIsCreating] = useState<boolean>(false); // Новое состояние для загрузки при создании
+  const [isCreating, setIsCreating] = useState<boolean>(false);
   const oauthToken = getCookie("yandex_token");
   const navigate = useNavigate();
+  const yandexApi = useMemo(() => new YandexApi(), []);
+
+  const fetchFiles = useCallback(async () => {
+    if (!oauthToken) {
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const fetchedFiles = await yandexApi.fetchFiles(oauthToken, "disk:/");
+      dispatch(setFiles(fetchedFiles));
+    } finally {
+      setLoading(false);
+    }
+  }, [yandexApi, oauthToken, dispatch]);
 
   useEffect(() => {
-    const fetchFiles = async () => {
-      if (!oauthToken) {
-        console.error("OAuth token is missing");
-        setLoading(false);
-        return;
-      }
-
-      const yandexApi = new YandexApi();
-      const fetchedFiles = await yandexApi.fetchFiles(oauthToken, "/");
-      dispatch(setFiles(fetchedFiles));
-      setLoading(false);
-    };
-
     fetchFiles();
-  }, [oauthToken, dispatch]);
+  }, [fetchFiles]);
 
-  // Сохраняем состояние открытых папок при изменении
   useEffect(() => {
     localStorage.setItem(
       "openFolders",
@@ -92,31 +93,44 @@ export const YandexDiskExplorer: React.FC<YandexDiskExplorerProps> = ({
     setShowOnlySupported(e.target.checked);
   };
 
-  const isSupportedFormat = (fileName: string) => {
-    return fileName.endsWith(".txt");
-  };
+  const isSupportedFormat = useCallback(
+    (fileName: string, mime_type: string) => {
+      return mime_type === "text/plain" || fileName.endsWith(".txt");
+    },
+    []
+  );
 
-  const filterFiles = (files: File[]): File[] => {
-    return files
-      .map((file) => {
-        if (file.type === "dir") {
-          const filteredChildren = filterFiles(file.children || []);
-          if (
-            filteredChildren.length > 0 ||
-            file.name.toLowerCase().includes(searchQuery)
-          ) {
-            return { ...file, children: filteredChildren };
+  const filterFiles = useCallback(
+    (files: File[]): File[] => {
+      return files
+        .map((file) => {
+          if (file.type === "dir") {
+            const filteredChildren = filterFiles(file.children || []);
+            return {
+              ...file,
+              children:
+                filteredChildren.length > 0 ? filteredChildren : undefined,
+            };
           }
-        } else if (
-          file.name.toLowerCase().includes(searchQuery) &&
-          (!showOnlySupported || isSupportedFormat(file.name))
-        ) {
           return file;
-        }
-        return undefined;
-      })
-      .filter((file): file is File => file !== undefined);
-  };
+        })
+        .filter((file) => {
+          const matchesSearchQuery = file.name
+            .toLowerCase()
+            .includes(searchQuery);
+          if (file.type === "dir") {
+            return (
+              matchesSearchQuery || (file.children && file.children.length > 0)
+            );
+          }
+          return (
+            matchesSearchQuery &&
+            (!showOnlySupported || isSupportedFormat(file.name, file.mime_type || ""))
+          );
+        });
+    },
+    [isSupportedFormat, showOnlySupported, searchQuery]
+  );
 
   const handleDeleteFile = (filePath: string) => {
     setFileToDelete(filePath);
@@ -237,7 +251,7 @@ export const YandexDiskExplorer: React.FC<YandexDiskExplorerProps> = ({
     try {
       const folderName = prompt("Введите имя новой папки:");
       if (folderName) {
-        setIsCreating(true); // Включаем индикатор загрузки
+        setIsCreating(true);
         const newFolderPath =
           parentPath === "disk:/"
             ? `disk:/${folderName}`
@@ -256,7 +270,7 @@ export const YandexDiskExplorer: React.FC<YandexDiskExplorerProps> = ({
     } catch (error) {
       console.error("Ошибка при создании папки:", error);
     } finally {
-      setIsCreating(false); // Отключаем индикатор загрузки
+      setIsCreating(false);
     }
   };
 
@@ -267,7 +281,7 @@ export const YandexDiskExplorer: React.FC<YandexDiskExplorerProps> = ({
     try {
       const fileName = prompt("Введите имя нового файла (.txt):");
       if (fileName && fileName.endsWith(".txt")) {
-        setIsCreating(true); // Включаем индикатор загрузки
+        setIsCreating(true);
         const newFilePath =
           parentPath === "disk:/"
             ? `disk:/${fileName}`
@@ -285,7 +299,7 @@ export const YandexDiskExplorer: React.FC<YandexDiskExplorerProps> = ({
     } catch (error) {
       console.error("Ошибка при создании файла:", error);
     } finally {
-      setIsCreating(false); // Отключаем индикатор загрузки
+      setIsCreating(false);
     }
   };
 
@@ -298,7 +312,7 @@ export const YandexDiskExplorer: React.FC<YandexDiskExplorerProps> = ({
 
   return (
     <div className="file-explorer">
-      {loading || isRenaming || isCreating ? ( // Добавляем проверку на isCreating
+      {loading || isRenaming || isCreating ? (
         <Loader />
       ) : (
         <>

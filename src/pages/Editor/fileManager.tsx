@@ -72,12 +72,14 @@ export const FileManager: React.FC = () => {
           <div className="modal-content">
             <h2>Ошибка аутентификации</h2>
             <p>Токен доступа отсутствует. Пожалуйста, войдите в систему.</p>
-            <button className="start-btn" onClick={handleYandexLogin}>
-              Войти через Яндекс
-            </button>
-            <button className="start-btn" onClick={handleGoogleLogin}>
-              Войти через Google
-            </button>
+            <div className="button-container">
+              <button className="start-btn" onClick={handleYandexLogin}>
+                Войти через Яндекс
+              </button>
+              <button className="start-btn" onClick={handleGoogleLogin}>
+                Войти через Google
+              </button>
+            </div>
             <button onClick={handleCloseModal}>Закрыть</button>
           </div>
         </div>
