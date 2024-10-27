@@ -154,9 +154,6 @@ const FileNode: React.FC<FileNodeProps> = ({
 
       // Проверяем, является ли целевая директория корневой
       if (isRootNode || file.path === "disk:/") {
-        console.log("Moving to root directory");
-        console.log("Source path:", sourcePath);
-
         // Получаем только имя файла из исходного пути
         const fileName = sourcePath.split("/").pop();
         if (!fileName) return;
@@ -203,9 +200,7 @@ const FileNode: React.FC<FileNodeProps> = ({
           0,
           currentPath.lastIndexOf("/")
         );
-        console.log("Parent path:", parentPath);
         const newPath = parentPath ? `${parentPath}/${newName}` : newName;
-        console.log("New path:", newPath);
         onRenameFile(currentPath, newPath);
       }
       setMenuFilePath(null);

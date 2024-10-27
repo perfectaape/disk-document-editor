@@ -33,7 +33,6 @@ export class YandexApi implements IFileAPI {
       ) {
         const items = response.data._embedded.items;
 
-        // Рекурсивно загружаем содержимое для каждой папки
         const filesWithChildren = await Promise.all(
           items.map(async (item: File) => {
             if (item.type === "dir") {
@@ -60,7 +59,6 @@ export class YandexApi implements IFileAPI {
     oauthToken: string,
     signal?: AbortSignal
   ): Promise<string | undefined> {
-    // Указываем, что функция может вернуть undefined
     try {
       const response = await this.apiClient.get(
         `/resources/download?path=${encodeURIComponent(path)}`,
@@ -69,14 +67,14 @@ export class YandexApi implements IFileAPI {
             Authorization: `OAuth ${oauthToken}`,
           },
           maxRedirects: 0,
-          signal, // Используем AbortSignal здесь
+          signal,
         }
       );
 
       if (response.status === 200 && response.data.href) {
         const fileResponse = await axios.get(response.data.href, {
           responseType: "arraybuffer",
-          signal, // Используем AbortSignal здесь
+          signal,
         });
 
         const decoder = new TextDecoder("utf-8");
@@ -91,7 +89,7 @@ export class YandexApi implements IFileAPI {
       } else {
         console.error("Ошибка при загрузке документа:", error);
       }
-      return undefined; // Возвращаем undefined в случае ошибки
+      return undefined;
     }
   }
 
@@ -121,7 +119,6 @@ export class YandexApi implements IFileAPI {
     content: string
   ): Promise<void> {
     try {
-      // Получаем URL для загрузки
       const uploadLinkResponse = await this.apiClient.get(
         `/resources/upload?path=${encodeURIComponent(path)}&overwrite=true`,
         {
@@ -132,7 +129,6 @@ export class YandexApi implements IFileAPI {
       );
 
       if (uploadLinkResponse.status === 200 && uploadLinkResponse.data.href) {
-        // Загружаем содержимое файла
         await axios.put(uploadLinkResponse.data.href, content, {
           headers: {
             "Content-Type": "text/plain",
@@ -162,8 +158,7 @@ export class YandexApi implements IFileAPI {
           },
         }
       );
-      // Assuming a successful response means the file was deleted
-      return { success: response.status === 204 }; // 204 No Content indicates success
+      return { success: response.status === 204 };
     } catch (error) {
       console.error("Ошибка при удалении файла:", error);
       return { success: false };
@@ -176,7 +171,6 @@ export class YandexApi implements IFileAPI {
     oauthToken: string
   ): Promise<{ success: boolean }> {
     try {
-      // Шаг 1: Копируем файл или папку
       const copyResponse = await this.apiClient.post(
         `/resources/copy?from=${encodeURIComponent(
           oldPath
@@ -189,15 +183,12 @@ export class YandexApi implements IFileAPI {
         }
       );
 
-      // Проверяем, получили ли мы ссылку на операцию
       if (copyResponse.status === 202 && copyResponse.data.href) {
-        // Ждем завершения операции копирования
         await this.waitForOperation(copyResponse.data.href, oauthToken);
       } else if (copyResponse.status !== 201) {
         throw new Error("Не удалось скопировать файл или папку");
       }
 
-      // Шаг 2: Удаляем оригинал
       const deleteResponse = await this.apiClient.delete(
         `/resources?path=${encodeURIComponent(oldPath)}`,
         {
@@ -207,9 +198,7 @@ export class YandexApi implements IFileAPI {
         }
       );
 
-      // Проверяем, получили ли мы ссылку на операцию удаления
       if (deleteResponse.status === 202 && deleteResponse.data.href) {
-        // Ждем завершения операции удаления
         await this.waitForOperation(deleteResponse.data.href, oauthToken);
       } else if (deleteResponse.status !== 204) {
         throw new Error("Не удалось удалить оригинальный файл или папку");
@@ -222,7 +211,6 @@ export class YandexApi implements IFileAPI {
     }
   }
 
-  // Добавляем новый метод для ожидания завершения операции
   private async waitForOperation(
     operationHref: string,
     oauthToken: string,
@@ -244,7 +232,6 @@ export class YandexApi implements IFileAPI {
           throw new Error("Операция завершилась с ошибкой");
         }
 
-        // Ждем 1 секунду перед следующей проверкой
         await new Promise((resolve) => setTimeout(resolve, 1000));
         attempts++;
       } catch (error) {
@@ -266,18 +253,12 @@ export class YandexApi implements IFileAPI {
     try {
       const fileName = sourcePath.split("/").pop();
       if (!fileName) {
-        console.error("Invalid file name");
         return { success: false };
       }
 
-      // Формируем путь назначения
       const finalPath = destinationPath
         ? `${destinationPath}/${fileName}`
         : fileName;
-
-      console.log("Moving file22:");
-      console.log("From:", sourcePath);
-      console.log("To:", finalPath);
 
       const response = await this.apiClient.post("/resources/move", null, {
         headers: {
@@ -285,7 +266,7 @@ export class YandexApi implements IFileAPI {
         },
         params: {
           from: sourcePath,
-          path: finalPath, // Используем правильно сформированный путь
+          path: finalPath,
           overwrite: false,
         },
       });

@@ -15,7 +15,10 @@ export const GoogleDriveExplorer: React.FC<GoogleDriveExplorerProps> = ({
 }) => {
   const [files, setFiles] = useState<File[]>([]);
   const [activeFilePath, setActiveFilePath] = useState<string | null>(null);
-  const [openFolders, setOpenFolders] = useState<Set<string>>(new Set());
+  const [openFolders, setOpenFolders] = useState<Set<string>>(() => {
+    const savedOpenFolders = localStorage.getItem("googleOpenFolders");
+    return savedOpenFolders ? new Set(JSON.parse(savedOpenFolders)) : new Set();
+  });
   const [searchQuery, setSearchQuery] = useState("");
   const [showOnlySupported, setShowOnlySupported] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -46,6 +49,14 @@ export const GoogleDriveExplorer: React.FC<GoogleDriveExplorerProps> = ({
   useEffect(() => {
     fetchFiles();
   }, [fetchFiles]);
+
+  // Сохраняем состояние открытых папок при изменении
+  useEffect(() => {
+    localStorage.setItem(
+      "googleOpenFolders",
+      JSON.stringify(Array.from(openFolders))
+    );
+  }, [openFolders]);
 
   const handleFileClick = useCallback(
     (fileId: string) => {
@@ -120,8 +131,6 @@ export const GoogleDriveExplorer: React.FC<GoogleDriveExplorerProps> = ({
           const updatedFiles = await googleApi.fetchFiles(oauthToken, "root");
           setFiles(updatedFiles);
         }
-      } catch (error) {
-        console.error("Error renaming file:", error);
       } finally {
         setIsRenaming(false);
       }
@@ -145,8 +154,6 @@ export const GoogleDriveExplorer: React.FC<GoogleDriveExplorerProps> = ({
           const updatedFiles = await googleApi.fetchFiles(oauthToken, "root");
           setFiles(updatedFiles);
         }
-      } catch (error) {
-        console.error("Error moving file:", error);
       } finally {
         setIsMoving(false);
       }
@@ -233,7 +240,7 @@ export const GoogleDriveExplorer: React.FC<GoogleDriveExplorerProps> = ({
         <div className="modal">
           <div className="modal-content">
             <h2>Подтверждение удаления</h2>
-            <p>Вы уверены, что хотите удалить этот файл?</p>
+            <p>Вы увере��ы, что хотите удалить этот файл?</p>
             <button onClick={confirmDelete} disabled={isDeleting}>
               {isDeleting ? "Удаление..." : "Удалить"}
             </button>

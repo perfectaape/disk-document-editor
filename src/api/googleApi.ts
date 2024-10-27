@@ -210,25 +210,76 @@ export class GoogleApi implements IFileAPI {
     oauthToken: string
   ): Promise<{ success: boolean }> {
     try {
-      const response = await this.apiClient.patch(
+      // Получаем текущих родителей исходного файла
+      const sourceFile = await this.apiClient.get<GoogleDriveFileMetadata>(
         `/files/${sourceId}`,
-        {
-          addParents: destinationId,
-          removeParents: "root",
-        },
         {
           headers: {
             Authorization: `Bearer ${oauthToken}`,
           },
           params: {
+            fields: "parents",
+          },
+        }
+      );
+
+      const currentParents = sourceFile.data.parents || [];
+      console.log("Current parents:", currentParents);
+
+      // Если перемещаем в корень, используем "root" как идентификатор
+      const targetParent = destinationId || "root";
+
+      // Проверяем, не является ли файл уже в целевой папке
+      if (currentParents.includes(targetParent)) {
+        console.log("Файл уже находится в целевой папке.");
+        return { success: true };
+      }
+
+      // Удаляем текущих родителей, чтобы переместить файл
+      const removeParents = currentParents.join(",");
+      console.log("Removing parents:", removeParents);
+      console.log("Adding parent:", targetParent);
+
+      // Отправляем запрос на перемещение файла
+      const response = await this.apiClient.patch(
+        `/files/${sourceId}`,
+        null, // Поскольку мы не обновляем содержимое файла, тело запроса может быть null
+        {
+          headers: {
+            Authorization: `Bearer ${oauthToken}`,
+            "Content-Type": "application/json",
+          },
+          params: {
+            addParents: targetParent,
+            removeParents: removeParents,
             fields: "id, parents",
           },
         }
       );
 
+      console.log("Move response:", response.data);
+
+      // Проверяем, что файл действительно перемещен
+      const updatedFile = await this.apiClient.get<GoogleDriveFileMetadata>(
+        `/files/${sourceId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${oauthToken}`,
+          },
+          params: {
+            fields: "parents",
+          },
+        }
+      );
+
+      console.log("Updated parents:", updatedFile.data.parents);
+
       return { success: response.status === 200 };
     } catch (error) {
-      console.error("Error moving file:", error);
+      console.error("Ошибка при перемещении файла:", error);
+      if (axios.isAxiosError(error) && error.response) {
+        console.error("Response data:", error.response.data);
+      }
       return { success: false };
     }
   }
