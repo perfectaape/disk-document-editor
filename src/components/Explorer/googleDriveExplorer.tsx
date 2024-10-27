@@ -27,6 +27,7 @@ export const GoogleDriveExplorer: React.FC<GoogleDriveExplorerProps> = ({
   const [isDeleting, setIsDeleting] = useState(false);
   const [isRenaming, setIsRenaming] = useState(false);
   const [isMoving, setIsMoving] = useState(false);
+  const [isCreating, setIsCreating] = useState(false); // Новое состояние для загрузки при создании
 
   const oauthToken = getCookie("google_token");
   const navigate = useNavigate();
@@ -99,7 +100,7 @@ export const GoogleDriveExplorer: React.FC<GoogleDriveExplorerProps> = ({
             }
           } else if (
             file.name.toLowerCase().includes(searchQuery) &&
-            (!showOnlySupported || isSupportedFormat(file.name, file.mime_type))
+            (!showOnlySupported || isSupportedFormat(file.name, file.mimeType || ""))
           ) {
             return file;
           }
@@ -161,6 +162,64 @@ export const GoogleDriveExplorer: React.FC<GoogleDriveExplorerProps> = ({
     [oauthToken, isMoving, googleApi]
   );
 
+  const handleCreateFolder = useCallback(
+    async (parentId: string) => {
+      if (!oauthToken) return;
+
+      const folderName = prompt("Введите имя новой папки:");
+      if (folderName) {
+        setIsCreating(true); // Включаем индикатор загрузки
+        try {
+          const path = `${
+            parentId === "disk:/" ? "root" : parentId
+          }/${folderName}`; // Используем "root" для корня
+          const response = await googleApi.createFolder(path, oauthToken);
+          if (response.success) {
+            const updatedFiles = await googleApi.fetchFiles(oauthToken, "root");
+            setFiles(updatedFiles);
+          } else {
+            console.error("Ошибка при создании папки");
+          }
+        } catch (error) {
+          console.error("Ошибка при создании папки:", error);
+        } finally {
+          setIsCreating(false); // Отключаем индикатор загрузки
+        }
+      }
+    },
+    [oauthToken, googleApi]
+  );
+
+  const handleCreateFile = useCallback(
+    async (parentId: string) => {
+      if (!oauthToken) return;
+
+      const fileName = prompt("Введите имя нового файла (.txt):");
+      if (fileName && fileName.endsWith(".txt")) {
+        setIsCreating(true); // Включаем индикатор загрузки
+        try {
+          const path = `${
+            parentId === "disk:/" ? "root" : parentId
+          }/${fileName}`; // Используем "root" для корня
+          const response = await googleApi.createFile(path, oauthToken);
+          if (response.success) {
+            const updatedFiles = await googleApi.fetchFiles(oauthToken, "root");
+            setFiles(updatedFiles);
+          } else {
+            console.error("Ошибка при создании файла");
+          }
+        } catch (error) {
+          console.error("Ошибка при создании файла:", error);
+        } finally {
+          setIsCreating(false); // Отключаем индикатор загрузки
+        }
+      } else {
+        alert("Имя файла должно заканчиваться на .txt");
+      }
+    },
+    [oauthToken, googleApi]
+  );
+
   const confirmDelete = useCallback(async () => {
     if (!fileToDelete || !oauthToken) return;
 
@@ -204,7 +263,7 @@ export const GoogleDriveExplorer: React.FC<GoogleDriveExplorerProps> = ({
 
   return (
     <div className="file-explorer">
-      {loading || isRenaming || isMoving ? (
+      {loading || isRenaming || isMoving || isCreating ? (
         <Loader />
       ) : (
         <>
@@ -233,6 +292,8 @@ export const GoogleDriveExplorer: React.FC<GoogleDriveExplorerProps> = ({
             onDeleteFile={handleDeleteFile}
             onRenameFile={handleRenameFile}
             onMoveFile={handleMoveFile}
+            onCreateFolder={handleCreateFolder}
+            onCreateFile={handleCreateFile}
           />
         </>
       )}
@@ -240,7 +301,7 @@ export const GoogleDriveExplorer: React.FC<GoogleDriveExplorerProps> = ({
         <div className="modal">
           <div className="modal-content">
             <h2>Подтверждение удаления</h2>
-            <p>Вы увере��ы, что хотите удалить этот файл?</p>
+            <p>Вы уверены, что хотите удалить этот файл?</p>
             <button onClick={confirmDelete} disabled={isDeleting}>
               {isDeleting ? "Удаление..." : "Удалить"}
             </button>

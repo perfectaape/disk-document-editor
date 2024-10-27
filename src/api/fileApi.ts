@@ -22,12 +22,14 @@ export interface IFileAPI {
     destinationPath: string,
     oauthToken: string
   ): Promise<{ success: boolean }>;
+  createFolder(path: string, oauthToken: string): Promise<{ success: boolean }>; // Добавлен метод createFolder
 }
 
 export interface File {
+  mimeType?: string;
   name: string;
   path: string;
-  mime_type: string;
+  mime_type?: string;
   type: string;
   _embedded?: {
     items: File[];

@@ -26,12 +26,11 @@ interface GoogleDriveFileList {
   files: GoogleDriveFileMetadata[];
   nextPageToken?: string;
 }
-
 function transformGoogleFile(file: GoogleDriveFile): File {
   return {
     name: file.name,
     path: file.id,
-    mime_type: file.mimeType,
+    mimeType: file.mimeType, // Изменено с mime_type на mimeType
     type:
       file.mimeType === "application/vnd.google-apps.folder" ? "dir" : "file",
   };
@@ -93,21 +92,22 @@ export class GoogleApi implements IFileAPI {
   async fetchDocumentContent(
     fileId: string,
     oauthToken: string,
-    signal?: AbortSignal
+    signal: AbortSignal
   ): Promise<string | undefined> {
-    const response = await this.apiClient.get(`/files/${fileId}`, {
-      headers: {
-        Authorization: `Bearer ${oauthToken}`,
-      },
-      params: {
-        alt: "media",
-      },
-      responseType: "arraybuffer",
-      signal,
-    });
+    try {
+      const response = await axios.get(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
+        headers: {
+          Authorization: `Bearer ${oauthToken}`,
+        },
+        responseType: 'text',
+        signal,
+      });
 
-    const decoder = new TextDecoder("utf-8");
-    return decoder.decode(response.data);
+      return response.data;
+    } catch (error) {
+      console.error("Ошибка при загрузке содержимого файла:", error);
+      return undefined;
+    }
   }
 
   async fetchFileMetadata(fileId: string, oauthToken: string): Promise<File> {
@@ -128,15 +128,19 @@ export class GoogleApi implements IFileAPI {
     oauthToken: string,
     content: string
   ): Promise<void> {
-    const uploadUrl = `https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`;
-
-    await axios.patch(uploadUrl, content, {
-      headers: {
-        "Content-Type": "text/plain",
-        Authorization: `Bearer ${oauthToken}`,
-      },
-    });
+    try {
+      await axios.patch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`, content, {
+        headers: {
+          "Content-Type": "text/plain",
+          Authorization: `Bearer ${oauthToken}`,
+        },
+      });
+    } catch (error) {
+      console.error("Ошибка при сохранении содержимого файла:", error);
+      throw error;
+    }
   }
+
   async renameFile(
     fileId: string,
     newName: string,
@@ -204,6 +208,7 @@ export class GoogleApi implements IFileAPI {
       },
     });
   }
+
   async moveFile(
     sourceId: string,
     destinationId: string,
@@ -280,6 +285,95 @@ export class GoogleApi implements IFileAPI {
       if (axios.isAxiosError(error) && error.response) {
         console.error("Response data:", error.response.data);
       }
+      return { success: false };
+    }
+  }
+
+  async createFolder(
+    path: string,
+    oauthToken: string
+  ): Promise<{ success: boolean }> {
+    try {
+      // Разделяем путь на родительский ID и имя папки
+      const [parentId, folderName] = path.split("/").reduce((acc, part, index, arr) => {
+        if (index === arr.length - 1) {
+          acc[1] = part; // Последний элемент - имя папки
+        } else {
+          acc[0] = acc[0] ? `${acc[0]}/${part}` : part; // Остальные - родительский путь
+        }
+        return acc;
+      }, ["", ""]);
+
+      const response = await this.apiClient.post(
+        "/files",
+        {
+          name: folderName,
+          mimeType: "application/vnd.google-apps.folder",
+          parents: [parentId || "root"], // Используем "root", если parentId пуст
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${oauthToken}`,
+          },
+        }
+      );
+
+      return { success: response.status === 200 };
+    } catch (error) {
+      console.error("Ошибка при создании папки:", error);
+      return { success: false };
+    }
+  }
+
+  async createFile(
+    path: string,
+    oauthToken: string,
+    content: string = ""
+  ): Promise<{ success: boolean }> {
+    try {
+      // Разделяем путь на родительский ID и имя файла
+      const [parentId, fileName] = path.split("/").reduce((acc, part, index, arr) => {
+        if (index === arr.length - 1) {
+          acc[1] = part; // Последний элемент - имя файла
+        } else {
+          acc[0] = acc[0] ? `${acc[0]}/${part}` : part; // Остальные - родительский путь
+        }
+        return acc;
+      }, ["", ""]);
+
+      // Step 1: Create a file metadata
+      const fileMetadata = {
+        name: fileName,
+        mimeType: "application/vnd.google-apps.document", // Указываем правильный MIME-тип
+        parents: [parentId || "root"], // Используем "root", если parentId пуст
+      };
+
+      const createResponse = await this.apiClient.post(
+        "/files",
+        fileMetadata,
+        {
+          headers: {
+            Authorization: `Bearer ${oauthToken}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      const fileId = createResponse.data.id;
+
+      // Step 2: Upload content to the file
+      const uploadUrl = `https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`;
+
+      await axios.patch(uploadUrl, content, {
+        headers: {
+          "Content-Type": "text/plain", // Указываем MIME-тип для содержимого
+          Authorization: `Bearer ${oauthToken}`,
+        },
+      });
+
+      return { success: true };
+    } catch (error) {
+      console.error("Ошибка при создании файла:", error);
       return { success: false };
     }
   }

@@ -50,7 +50,7 @@ export const Editor: React.FC<EditorProps> = React.memo(({ isFileDeleted }) => {
         const mimeType =
           service === "yandex" ? fileMetadata.mime_type : fileMetadata.mimeType;
 
-        if (!isSupportedFormat(mimeType)) {
+        if (!isSupportedFormat(mimeType || "")) {
           setUnsupportedFormat(true);
           setLoading(false);
           return;

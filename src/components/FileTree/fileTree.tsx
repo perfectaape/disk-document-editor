@@ -11,6 +11,8 @@ interface FileTreeProps {
   onDeleteFile: (filePath: string) => void;
   onRenameFile: (oldPath: string, newPath: string) => void;
   onMoveFile: (sourcePath: string, destinationPath: string) => Promise<void>;
+  onCreateFolder: (parentPath: string) => Promise<void>;
+  onCreateFile: (parentPath: string) => Promise<void>;
 }
 
 const FileTree: React.FC<FileTreeProps> = ({
@@ -22,11 +24,12 @@ const FileTree: React.FC<FileTreeProps> = ({
   onDeleteFile,
   onRenameFile,
   onMoveFile,
+  onCreateFolder,
+  onCreateFile,
 }) => {
   const [menuFilePath, setMenuFilePath] = useState<string | null>(null);
   const [draggedOver, setDraggedOver] = useState<string | null>(null);
 
-  // Создаем корневой файл
   const rootFile: File = {
     name: "Ваш диск",
     path: "disk:/",
@@ -46,6 +49,8 @@ const FileTree: React.FC<FileTreeProps> = ({
         onDeleteFile={onDeleteFile}
         onRenameFile={onRenameFile}
         onMoveFile={onMoveFile}
+        onCreateFolder={onCreateFolder}
+        onCreateFile={onCreateFile}
         menuFilePath={menuFilePath}
         setMenuFilePath={setMenuFilePath}
         draggedOver={draggedOver}
@@ -65,6 +70,8 @@ interface FileNodeProps {
   onDeleteFile: (filePath: string) => void;
   onRenameFile: (oldPath: string, newPath: string) => void;
   onMoveFile: (sourcePath: string, destinationPath: string) => Promise<void>;
+  onCreateFolder: (parentPath: string) => Promise<void>;
+  onCreateFile: (parentPath: string) => Promise<void>;
   menuFilePath: string | null;
   setMenuFilePath: (filePath: string | null) => void;
   draggedOver: string | null;
@@ -81,6 +88,8 @@ const FileNode: React.FC<FileNodeProps> = ({
   onDeleteFile,
   onRenameFile,
   onMoveFile,
+  onCreateFolder,
+  onCreateFile,
   menuFilePath,
   setMenuFilePath,
   draggedOver,
@@ -105,6 +114,35 @@ const FileNode: React.FC<FileNodeProps> = ({
       document.removeEventListener("mousedown", handleClickOutside);
     };
   }, [setMenuFilePath]);
+
+  const handleMenuToggle = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+
+      if (menuFilePath === file.path) {
+        setMenuFilePath(null);
+      } else {
+        setMenuFilePath(file.path);
+        const menu = menuRef.current;
+        if (menu) {
+          const rect = (e.target as HTMLElement).getBoundingClientRect();
+          menu.style.top = `${rect.top}px`;
+          menu.style.left = `${rect.right + 5}px`;
+        }
+      }
+    },
+    [file.path, menuFilePath, setMenuFilePath]
+  );
+
+  const handleCreateFolder = useCallback(() => {
+    onCreateFolder(file.path);
+    setMenuFilePath(null);
+  }, [file.path, onCreateFolder, setMenuFilePath]);
+
+  const handleCreateFile = useCallback(() => {
+    onCreateFile(file.path);
+    setMenuFilePath(null);
+  }, [file.path, onCreateFile, setMenuFilePath]);
 
   const handleDragStart = useCallback(
     (e: React.DragEvent) => {
@@ -152,19 +190,15 @@ const FileNode: React.FC<FileNodeProps> = ({
         .replace(/^disk:\//g, "");
       if (!sourcePath) return;
 
-      // Проверяем, является ли целевая директория корневой
       if (isRootNode || file.path === "disk:/") {
-        // Получаем только имя файла из исходного пути
         const fileName = sourcePath.split("/").pop();
         if (!fileName) return;
 
-        // Для корневой директории передаем пустой путь
         await onMoveFile(sourcePath, "");
         setDraggedOver(null);
         return;
       }
 
-      // Для остальных случаев используем обычную логику
       const targetDir = file.path.replace(/^disk:\//g, "");
 
       if (sourcePath === targetDir) return;
@@ -206,26 +240,6 @@ const FileNode: React.FC<FileNodeProps> = ({
       setMenuFilePath(null);
     },
     [file.path, file.name, onRenameFile, setMenuFilePath]
-  );
-
-  const handleMenuToggle = useCallback(
-    (e: React.MouseEvent) => {
-      e.stopPropagation();
-
-      if (menuFilePath === file.path) {
-        setMenuFilePath(null);
-      } else {
-        setMenuFilePath(file.path);
-        // Позиционируем меню рядом с курсором
-        const menu = menuRef.current;
-        if (menu) {
-          const rect = (e.target as HTMLElement).getBoundingClientRect();
-          menu.style.top = `${rect.top}px`;
-          menu.style.left = `${rect.right + 5}px`; // Добавляем небольшой отступ
-        }
-      }
-    },
-    [file.path, menuFilePath, setMenuFilePath]
   );
 
   return (
@@ -284,6 +298,12 @@ const FileNode: React.FC<FileNodeProps> = ({
               </div>
             </>
           )}
+          <div className="context-menu-item" onClick={handleCreateFolder}>
+            Создать папку
+          </div>
+          <div className="context-menu-item" onClick={handleCreateFile}>
+            Создать файл
+          </div>
         </div>
       )}
       {isOpen && file.children && file.children.length > 0 && (
@@ -299,6 +319,8 @@ const FileNode: React.FC<FileNodeProps> = ({
               onDeleteFile={onDeleteFile}
               onRenameFile={onRenameFile}
               onMoveFile={onMoveFile}
+              onCreateFolder={onCreateFolder}
+              onCreateFile={onCreateFile}
               menuFilePath={menuFilePath}
               setMenuFilePath={setMenuFilePath}
               draggedOver={draggedOver}

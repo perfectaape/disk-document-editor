@@ -35,6 +35,7 @@ export const YandexDiskExplorer: React.FC<YandexDiskExplorerProps> = ({
   const [fileToDelete, setFileToDelete] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState<boolean>(false);
   const [isRenaming, setIsRenaming] = useState<boolean>(false);
+  const [isCreating, setIsCreating] = useState<boolean>(false); // Новое состояние для загрузки при создании
   const oauthToken = getCookie("yandex_token");
   const navigate = useNavigate();
 
@@ -164,12 +165,8 @@ export const YandexDiskExplorer: React.FC<YandexDiskExplorerProps> = ({
     const yandexApi = new YandexApi();
 
     try {
-      // Убедимся, что пути не содержат лишних префиксов
       const cleanOldPath = oldPath.replace(/^disk:\//g, "");
       const cleanNewPath = newPath.replace(/^disk:\//g, "");
-
-      console.log("Old path:", cleanOldPath);
-      console.log("New path:", cleanNewPath);
 
       const response = await yandexApi.renameFile(
         cleanOldPath,
@@ -190,11 +187,6 @@ export const YandexDiskExplorer: React.FC<YandexDiskExplorerProps> = ({
     }
   };
 
-  const cancelDelete = () => {
-    setShowDeleteDialog(false);
-    setFileToDelete(null);
-  };
-
   const handleMoveFile = async (
     sourcePath: string,
     destinationPath: string
@@ -205,7 +197,6 @@ export const YandexDiskExplorer: React.FC<YandexDiskExplorerProps> = ({
     const yandexApi = new YandexApi();
 
     try {
-      // 1. Очищаем пути
       const cleanSourcePath = sourcePath
         .replace(/^disk:\//g, "")
         .replace(/^\/+/, "");
@@ -213,30 +204,16 @@ export const YandexDiskExplorer: React.FC<YandexDiskExplorerProps> = ({
         .replace(/^disk:\//g, "")
         .replace(/^\/+/, "");
 
-      // 2. Разбираем исходный путь
-      const sourcePathParts = cleanSourcePath.split("/");
-
-      // 3. Проверяем, перемещаем ли мы файл вверх по дереву
       const isMovingUp =
         cleanSourcePath.includes("/") &&
         (!targetDir ||
-          targetDir.split("/").length < sourcePathParts.length - 1);
+          targetDir.split("/").length < cleanSourcePath.split("/").length - 1);
 
-      // 4. Формируем конечный путь
-      const finalDestinationPath = isMovingUp
-        ? targetDir // Если перемещаем вверх, используем только целевую директорию
-        : `${targetDir}`; // Если вниз или на том же уровне
+      const finalDestinationPath = isMovingUp ? targetDir : `${targetDir}`;
 
-      console.log("Moving file - detailed info:");
-      console.log("Source path:", cleanSourcePath);
-      console.log("Target directory:", targetDir);
-      console.log("Is moving up:", isMovingUp);
-      console.log("Final destination:", finalDestinationPath);
-
-      // Передаем destinationPath как есть, без добавления имени файла
       const response = await yandexApi.moveFile(
         cleanSourcePath,
-        finalDestinationPath, // Можно пустой строкой
+        finalDestinationPath,
         oauthToken
       );
 
@@ -253,11 +230,75 @@ export const YandexDiskExplorer: React.FC<YandexDiskExplorerProps> = ({
     }
   };
 
+  const handleCreateFolder = async (parentPath: string) => {
+    if (!oauthToken) return;
+
+    const yandexApi = new YandexApi();
+    try {
+      const folderName = prompt("Введите имя новой папки:");
+      if (folderName) {
+        setIsCreating(true); // Включаем индикатор загрузки
+        const newFolderPath =
+          parentPath === "disk:/"
+            ? `disk:/${folderName}`
+            : `${parentPath}/${folderName}`;
+        const response = await yandexApi.createFolder(
+          newFolderPath,
+          oauthToken
+        );
+        if (response.success) {
+          const updatedFiles = await yandexApi.fetchFiles(oauthToken, "/");
+          dispatch(setFiles(updatedFiles));
+        } else {
+          console.error("Ошибка при создании папки");
+        }
+      }
+    } catch (error) {
+      console.error("Ошибка при создании папки:", error);
+    } finally {
+      setIsCreating(false); // Отключаем индикатор загрузки
+    }
+  };
+
+  const handleCreateFile = async (parentPath: string) => {
+    if (!oauthToken) return;
+
+    const yandexApi = new YandexApi();
+    try {
+      const fileName = prompt("Введите имя нового файла (.txt):");
+      if (fileName && fileName.endsWith(".txt")) {
+        setIsCreating(true); // Включаем индикатор загрузки
+        const newFilePath =
+          parentPath === "disk:/"
+            ? `disk:/${fileName}`
+            : `${parentPath}/${fileName}`;
+        const response = await yandexApi.createFile(newFilePath, oauthToken);
+        if (response.success) {
+          const updatedFiles = await yandexApi.fetchFiles(oauthToken, "/");
+          dispatch(setFiles(updatedFiles));
+        } else {
+          console.error("Ошибка при создании файла");
+        }
+      } else {
+        alert("Имя файла должно заканчиваться на .txt");
+      }
+    } catch (error) {
+      console.error("Ошибка при создании файла:", error);
+    } finally {
+      setIsCreating(false); // Отключаем индикатор загрузки
+    }
+  };
+
+  const cancelDelete = () => {
+    setShowDeleteDialog(false);
+    setFileToDelete(null);
+  };
+
   const filteredFiles = filterFiles(files);
 
   return (
     <div className="file-explorer">
-      {loading || isRenaming ? (
+      {loading || isRenaming || isCreating ? ( // Добавляем проверку на isCreating
         <Loader />
       ) : (
         <>
@@ -286,6 +327,8 @@ export const YandexDiskExplorer: React.FC<YandexDiskExplorerProps> = ({
             onDeleteFile={handleDeleteFile}
             onRenameFile={handleRenameFile}
             onMoveFile={handleMoveFile}
+            onCreateFolder={handleCreateFolder}
+            onCreateFile={handleCreateFile}
           />
         </>
       )}

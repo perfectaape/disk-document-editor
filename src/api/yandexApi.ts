@@ -12,10 +12,8 @@ export class YandexApi implements IFileAPI {
 
   async fetchFiles(oauthToken: string, path: string = "/"): Promise<File[]> {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const response: AxiosResponse<any> = await this.apiClient.get(
-        "/resources",
-        {
+      const response: AxiosResponse<{ _embedded: { items: File[] } }> =
+        await this.apiClient.get("/resources", {
           headers: {
             Authorization: `OAuth ${oauthToken}`,
           },
@@ -23,8 +21,7 @@ export class YandexApi implements IFileAPI {
             path: path,
             limit: 1000,
           },
-        }
-      );
+        });
 
       if (
         response.data &&
@@ -54,61 +51,73 @@ export class YandexApi implements IFileAPI {
     }
   }
 
-  async fetchDocumentContent(
+  async createFolder(
     path: string,
-    oauthToken: string,
-    signal?: AbortSignal
-  ): Promise<string | undefined> {
+    oauthToken: string
+  ): Promise<{ success: boolean }> {
     try {
-      const response = await this.apiClient.get(
-        `/resources/download?path=${encodeURIComponent(path)}`,
+      const normalizedPath = path.startsWith("disk:/") ? path : `disk:/${path}`;
+      const response: AxiosResponse = await this.apiClient.put(
+        "/resources",
+        null,
         {
           headers: {
             Authorization: `OAuth ${oauthToken}`,
           },
-          maxRedirects: 0,
-          signal,
+          params: {
+            path: normalizedPath, // Используем нормализованный путь
+          },
         }
       );
 
-      if (response.status === 200 && response.data.href) {
-        const fileResponse = await axios.get(response.data.href, {
-          responseType: "arraybuffer",
-          signal,
-        });
-
-        const decoder = new TextDecoder("utf-8");
-        const textContent = decoder.decode(fileResponse.data);
-        return textContent;
-      } else {
-        throw new Error("Не удалось получить ссылку для скачивания");
-      }
+      return { success: response.status === 201 };
     } catch (error) {
-      if (axios.isCancel(error)) {
-        console.log("Запрос был отменен");
-      } else {
-        console.error("Ошибка при загрузке документа:", error);
-      }
-      return undefined;
+      console.error("Ошибка при создании папки:", error);
+      return { success: false };
     }
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  async fetchFileMetadata(path: string, oauthToken: string): Promise<any> {
+  async deleteFile(
+    path: string,
+    oauthToken: string
+  ): Promise<{ success: boolean }> {
     try {
-      const response = await this.apiClient.get(`/resources`, {
-        headers: {
-          Authorization: `OAuth ${oauthToken}`,
-        },
-        params: {
-          path: path,
-          fields: "name, mime_type, created, modified",
-        },
-      });
+      const response: AxiosResponse = await this.apiClient.delete(
+        "/resources",
+        {
+          headers: {
+            Authorization: `OAuth ${oauthToken}`,
+          },
+          params: {
+            path: path,
+          },
+        }
+      );
+
+      return { success: response.status === 204 };
+    } catch (error) {
+      console.error("Ошибка при удалении файла:", error);
+      return { success: false };
+    }
+  }
+
+  async fetchFileMetadata(path: string, oauthToken: string): Promise<File> {
+    try {
+      const response: AxiosResponse<File> = await this.apiClient.get(
+        "/resources",
+        {
+          headers: {
+            Authorization: `OAuth ${oauthToken}`,
+          },
+          params: {
+            path: path,
+          },
+        }
+      );
 
       return response.data;
     } catch (error) {
-      console.error("Error fetching file metadata from Yandex Disk:", error);
+      console.error("Ошибка при получении метаданных файла:", error);
       throw error;
     }
   }
@@ -119,96 +128,128 @@ export class YandexApi implements IFileAPI {
     content: string
   ): Promise<void> {
     try {
-      const uploadLinkResponse = await this.apiClient.get(
-        `/resources/upload?path=${encodeURIComponent(path)}&overwrite=true`,
-        {
+      const uploadLinkResponse: AxiosResponse<{ href: string }> =
+        await this.apiClient.get("/resources/upload", {
           headers: {
             Authorization: `OAuth ${oauthToken}`,
           },
-        }
-      );
-
-      if (uploadLinkResponse.status === 200 && uploadLinkResponse.data.href) {
-        await axios.put(uploadLinkResponse.data.href, content, {
-          headers: {
-            "Content-Type": "text/plain",
+          params: {
+            path: path,
+            overwrite: true,
           },
         });
-      } else {
-        throw new Error("Не удалось получить ссылку для загрузки");
-      }
+
+      await axios.put(uploadLinkResponse.data.href, content, {
+        headers: {
+          "Content-Type": "text/plain",
+        },
+      });
     } catch (error) {
       console.error("Ошибка при сохранении содержимого документа:", error);
       throw error;
     }
   }
 
-  async deleteFile(
-    filePath: string,
-    oauthToken: string
-  ): Promise<{ success: boolean }> {
-    try {
-      const response = await axios.delete(
-        `https://cloud-api.yandex.net/v1/disk/resources?path=${encodeURIComponent(
-          filePath
-        )}`,
-        {
-          headers: {
-            Authorization: `OAuth ${oauthToken}`,
-          },
-        }
-      );
-      return { success: response.status === 204 };
-    } catch (error) {
-      console.error("Ошибка при удалении файла:", error);
-      return { success: false };
-    }
-  }
-
   async renameFile(
-    oldPath: string,
-    newPath: string,
+    fileId: string,
+    newName: string,
     oauthToken: string
   ): Promise<{ success: boolean }> {
     try {
-      const copyResponse = await this.apiClient.post(
-        `/resources/copy?from=${encodeURIComponent(
-          oldPath
-        )}&path=${encodeURIComponent(newPath)}`,
+      const response: AxiosResponse = await this.apiClient.post(
+        "/resources/move",
         null,
         {
           headers: {
             Authorization: `OAuth ${oauthToken}`,
           },
-        }
-      );
-
-      if (copyResponse.status === 202 && copyResponse.data.href) {
-        await this.waitForOperation(copyResponse.data.href, oauthToken);
-      } else if (copyResponse.status !== 201) {
-        throw new Error("Не удалось скопировать файл или папку");
-      }
-
-      const deleteResponse = await this.apiClient.delete(
-        `/resources?path=${encodeURIComponent(oldPath)}`,
-        {
-          headers: {
-            Authorization: `OAuth ${oauthToken}`,
+          params: {
+            from: fileId,
+            path: newName,
           },
         }
       );
 
-      if (deleteResponse.status === 202 && deleteResponse.data.href) {
-        await this.waitForOperation(deleteResponse.data.href, oauthToken);
-      } else if (deleteResponse.status !== 204) {
-        throw new Error("Не удалось удалить оригинальный файл или папку");
+      return { success: response.status === 202 };
+    } catch (error) {
+      console.error("Ошибка при переименовании файла:", error);
+      return { success: false };
+    }
+  }
+
+  async moveFile(
+    sourcePath: string,
+    destinationPath: string,
+    oauthToken: string
+  ): Promise<{ success: boolean }> {
+    try {
+      const fileName = sourcePath.split("/").pop();
+      if (!fileName) {
+        console.error("Invalid file name");
+        return { success: false };
+      }
+
+      const finalPath = destinationPath
+        ? `${destinationPath}/${fileName}`
+        : fileName;
+
+      const response: AxiosResponse = await this.apiClient.post(
+        "/resources/move",
+        null,
+        {
+          headers: {
+            Authorization: `OAuth ${oauthToken}`,
+          },
+          params: {
+            from: sourcePath,
+            path: finalPath,
+            overwrite: false,
+          },
+        }
+      );
+
+      if (response.status === 202 && response.data.href) {
+        await this.waitForOperation(response.data.href, oauthToken);
       }
 
       return { success: true };
     } catch (error) {
-      console.error("Ошибка при переименовании:", error);
+      console.error("Error moving file:", error);
       return { success: false };
     }
+  }
+
+  async fetchDocumentContent(
+    path: string,
+    oauthToken: string,
+    signal?: AbortSignal
+  ): Promise<string | undefined> {
+    try {
+      const response: AxiosResponse<{ href: string }> =
+        await this.apiClient.get(
+          `/resources/download?path=${encodeURIComponent(path)}`,
+          {
+            headers: {
+              Authorization: `OAuth ${oauthToken}`,
+            },
+            maxRedirects: 0,
+            signal,
+          }
+        );
+
+      if (response.status === 200 && response.data.href) {
+        const fileResponse = await axios.get(response.data.href, {
+          responseType: "arraybuffer",
+          signal,
+        });
+
+        const decoder = new TextDecoder("utf-8");
+        return decoder.decode(fileResponse.data);
+      }
+    } catch (error) {
+      console.error("Ошибка при получении содержимого документа:", error);
+    }
+    return undefined;
   }
 
   private async waitForOperation(
@@ -220,11 +261,14 @@ export class YandexApi implements IFileAPI {
 
     while (attempts < maxAttempts) {
       try {
-        const response = await axios.get(operationHref, {
-          headers: {
-            Authorization: `OAuth ${oauthToken}`,
-          },
-        });
+        const response: AxiosResponse<{ status: string }> = await axios.get(
+          operationHref,
+          {
+            headers: {
+              Authorization: `OAuth ${oauthToken}`,
+            },
+          }
+        );
 
         if (response.data.status === "success") {
           return;
@@ -241,43 +285,35 @@ export class YandexApi implements IFileAPI {
     }
 
     throw new Error(
-      "Превышено максимальное количество попыток проверки статуса операции"
+      "Превышено максимально�� количество попыток проверки статуса операции"
     );
   }
 
-  async moveFile(
-    sourcePath: string,
-    destinationPath: string,
-    oauthToken: string
-  ): Promise<{ success: boolean }> {
+  async createFile(path: string, oauthToken: string, content: string = ""): Promise<{ success: boolean }> {
     try {
-      const fileName = sourcePath.split("/").pop();
-      if (!fileName) {
-        return { success: false };
-      }
+      const normalizedPath = path.startsWith("disk:/") ? path : `disk:/${path}`;
+      const uploadLinkResponse: AxiosResponse<{ href: string }> = await this.apiClient.get(
+        "/resources/upload",
+        {
+          headers: {
+            Authorization: `OAuth ${oauthToken}`,
+          },
+          params: {
+            path: normalizedPath, // Используем нормализованный путь
+            overwrite: true,
+          },
+        }
+      );
 
-      const finalPath = destinationPath
-        ? `${destinationPath}/${fileName}`
-        : fileName;
-
-      const response = await this.apiClient.post("/resources/move", null, {
+      await axios.put(uploadLinkResponse.data.href, content, {
         headers: {
-          Authorization: `OAuth ${oauthToken}`,
-        },
-        params: {
-          from: sourcePath,
-          path: finalPath,
-          overwrite: false,
+          "Content-Type": "text/plain",
         },
       });
 
-      if (response.status === 202 && response.data.href) {
-        await this.waitForOperation(response.data.href, oauthToken);
-      }
-
       return { success: true };
     } catch (error) {
-      console.error("Error moving file:", error);
+      console.error("Ошибка при создании файла:", error);
       return { success: false };
     }
   }
