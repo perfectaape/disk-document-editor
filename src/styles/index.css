@@ -1,10 +1,10 @@
 body {
-  background-color: #f7f9ff;
   font-family: "Inter", sans-serif;
   display: flex;
   justify-content: center;
   align-items: center;
   height: 100vh;
+  background-color: #fff;
 }
 
 h1 {
@@ -47,4 +47,3 @@ h1 {
   color: #ffdc60;
   transform: scale(1.1);
 }
- 

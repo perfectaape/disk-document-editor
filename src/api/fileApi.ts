@@ -17,6 +17,11 @@ export interface IFileAPI {
     newName: string,
     oauthToken: string
   ): Promise<{ success: boolean }>;
+  moveFile(
+    sourcePath: string,
+    destinationPath: string,
+    oauthToken: string
+  ): Promise<{ success: boolean }>;
 }
 
 export interface File {

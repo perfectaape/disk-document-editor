@@ -89,7 +89,7 @@ export const FileManager: React.FC = () => {
           <YandexDiskExplorer onFileDeleted={handleFileDeleted} />
         )}
       </div>
-      <div>
+      <div className="editor-container">
         {filePath ? (
           <Editor isFileDeleted={isFileDeleted} />
         ) : (

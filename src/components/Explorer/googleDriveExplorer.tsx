@@ -23,6 +23,7 @@ export const GoogleDriveExplorer: React.FC<GoogleDriveExplorerProps> = ({
   const [fileToDelete, setFileToDelete] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isRenaming, setIsRenaming] = useState(false);
+  const [isMoving, setIsMoving] = useState(false);
 
   const oauthToken = getCookie("google_token");
   const navigate = useNavigate();
@@ -128,6 +129,31 @@ export const GoogleDriveExplorer: React.FC<GoogleDriveExplorerProps> = ({
     [oauthToken, isRenaming, googleApi]
   );
 
+  const handleMoveFile = useCallback(
+    async (sourceId: string, destinationId: string) => {
+      if (!oauthToken || isMoving) return;
+
+      setIsMoving(true);
+      try {
+        const response = await googleApi.moveFile(
+          sourceId,
+          destinationId,
+          oauthToken
+        );
+
+        if (response.success) {
+          const updatedFiles = await googleApi.fetchFiles(oauthToken, "root");
+          setFiles(updatedFiles);
+        }
+      } catch (error) {
+        console.error("Error moving file:", error);
+      } finally {
+        setIsMoving(false);
+      }
+    },
+    [oauthToken, isMoving, googleApi]
+  );
+
   const confirmDelete = useCallback(async () => {
     if (!fileToDelete || !oauthToken) return;
 
@@ -171,7 +197,7 @@ export const GoogleDriveExplorer: React.FC<GoogleDriveExplorerProps> = ({
 
   return (
     <div className="file-explorer">
-      {loading || isRenaming ? (
+      {loading || isRenaming || isMoving ? (
         <Loader />
       ) : (
         <>
@@ -199,6 +225,7 @@ export const GoogleDriveExplorer: React.FC<GoogleDriveExplorerProps> = ({
             toggleFolder={toggleFolder}
             onDeleteFile={handleDeleteFile}
             onRenameFile={handleRenameFile}
+            onMoveFile={handleMoveFile}
           />
         </>
       )}

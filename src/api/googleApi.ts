@@ -22,15 +22,6 @@ interface GoogleDriveFileMetadata {
   modifiedTime?: string;
 }
 
-interface GoogleDriveOperation {
-  id: string;
-  status: "pending" | "completed" | "failed";
-  error?: {
-    message: string;
-    code?: number;
-  };
-}
-
 interface GoogleDriveFileList {
   files: GoogleDriveFileMetadata[];
   nextPageToken?: string;
@@ -199,37 +190,6 @@ export class GoogleApi implements IFileAPI {
       return { success: false };
     }
   }
-  private async waitForOperation(
-    operationId: string,
-    oauthToken: string,
-    maxAttempts: number = 10
-  ): Promise<void> {
-    let attempts = 0;
-
-    while (attempts < maxAttempts) {
-      const response = await this.apiClient.get<GoogleDriveOperation>(
-        `/operations/${operationId}`,
-        {
-          headers: {
-            Authorization: `Bearer ${oauthToken}`,
-          },
-        }
-      );
-
-      if (response.data.status === "completed") {
-        return;
-      } else if (response.data.status === "failed") {
-        throw new Error(response.data.error?.message || "Unknown error");
-      }
-
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-      attempts++;
-    }
-
-    throw new Error(
-      "Maximum number of operation status check attempts exceeded"
-    );
-  }
 
   private async updateFileMetadata(
     fileId: string,
@@ -243,5 +203,33 @@ export class GoogleApi implements IFileAPI {
         fields: "id, name, mimeType, parents",
       },
     });
+  }
+  async moveFile(
+    sourceId: string,
+    destinationId: string,
+    oauthToken: string
+  ): Promise<{ success: boolean }> {
+    try {
+      const response = await this.apiClient.patch(
+        `/files/${sourceId}`,
+        {
+          addParents: destinationId,
+          removeParents: "root",
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${oauthToken}`,
+          },
+          params: {
+            fields: "id, parents",
+          },
+        }
+      );
+
+      return { success: response.status === 200 };
+    } catch (error) {
+      console.error("Error moving file:", error);
+      return { success: false };
+    }
   }
 }

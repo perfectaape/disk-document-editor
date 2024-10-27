@@ -8,4 +8,8 @@ export const setActiveFilePath = createAction<string | null>(
 );
 export const renameFile = createAction<{ oldPath: string; newPath: string }>(
   "RENAME_FILE"
-); // New action
+);
+export const moveFile = createAction<{
+  sourcePath: string;
+  destinationPath: string;
+}>("MOVE_FILE");

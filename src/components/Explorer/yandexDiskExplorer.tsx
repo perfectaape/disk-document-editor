@@ -5,7 +5,6 @@ import {
   setFiles,
   deleteFile,
   setActiveFilePath,
-  renameFile,
 } from "../../store/fileActions";
 import { YandexApi } from "../../api/yandexApi";
 import FileTree from "../FileTree/fileTree";
@@ -25,7 +24,10 @@ export const YandexDiskExplorer: React.FC<YandexDiskExplorerProps> = ({
     (state: RootState) => state.fileState
   );
   const dispatch = useDispatch();
-  const [openFolders, setOpenFolders] = useState<Set<string>>(new Set());
+  const [openFolders, setOpenFolders] = useState<Set<string>>(() => {
+    const savedOpenFolders = localStorage.getItem("openFolders");
+    return savedOpenFolders ? new Set(JSON.parse(savedOpenFolders)) : new Set();
+  });
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [showOnlySupported, setShowOnlySupported] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(true);
@@ -52,6 +54,14 @@ export const YandexDiskExplorer: React.FC<YandexDiskExplorerProps> = ({
 
     fetchFiles();
   }, [oauthToken, dispatch]);
+
+  // Сохраняем состояние открытых папок при изменении
+  useEffect(() => {
+    localStorage.setItem(
+      "openFolders",
+      JSON.stringify(Array.from(openFolders))
+    );
+  }, [openFolders]);
 
   const handleFileClick = useCallback(
     (filePath: string) => {
@@ -114,30 +124,27 @@ export const YandexDiskExplorer: React.FC<YandexDiskExplorerProps> = ({
 
   const confirmDelete = async () => {
     if (fileToDelete && oauthToken) {
-      setIsDeleting(true); // Start the loading indicator
+      setIsDeleting(true);
       const yandexApi = new YandexApi();
       try {
-        // Fetch the folder contents if it's a directory
         const folderContents = await yandexApi.fetchFiles(
           oauthToken,
           fileToDelete
         );
 
-        // Delete all files inside the folder
         for (const file of folderContents) {
           await yandexApi.deleteFile(file.path, oauthToken);
         }
 
-        // Now delete the folder itself
         const response = await yandexApi.deleteFile(fileToDelete, oauthToken);
 
         if (response.success) {
           dispatch(deleteFile(fileToDelete));
           if (activeFilePath === fileToDelete) {
             dispatch(setActiveFilePath(null));
-            onFileDeleted(); // Notify that a file has been deleted
+            onFileDeleted();
           }
-          setShowDeleteDialog(false); // Close the modal
+          setShowDeleteDialog(false);
           setFileToDelete(null);
         } else {
           console.error("Ошибка при удалении файла на сервере");
@@ -145,31 +152,32 @@ export const YandexDiskExplorer: React.FC<YandexDiskExplorerProps> = ({
       } catch (error) {
         console.error("Ошибка при удалении файла:", error);
       } finally {
-        setIsDeleting(false); // Stop the loading indicator
+        setIsDeleting(false);
       }
     }
   };
 
-  const handleRenameFile = async (oldPath: string, newName: string) => {
+  const handleRenameFile = async (oldPath: string, newPath: string) => {
     if (!oauthToken) return;
 
     setIsRenaming(true);
     const yandexApi = new YandexApi();
 
     try {
-      const response = await yandexApi.renameFile(oldPath, newName, oauthToken);
+      // Убедимся, что пути не содержат лишних префиксов
+      const cleanOldPath = oldPath.replace(/^disk:\//g, "");
+      const cleanNewPath = newPath.replace(/^disk:\//g, "");
+
+      console.log("Old path:", cleanOldPath);
+      console.log("New path:", cleanNewPath);
+
+      const response = await yandexApi.renameFile(
+        cleanOldPath,
+        cleanNewPath,
+        oauthToken
+      );
 
       if (response.success) {
-        // Используем Redux action для обновления состояния
-        dispatch(
-          renameFile({
-            oldPath: oldPath,
-            newPath: newName,
-          })
-        );
-
-        // Опционально: можно обновить состояние с сервера
-        // для синхронизации с актуальными данными
         const updatedFiles = await yandexApi.fetchFiles(oauthToken, "/");
         dispatch(setFiles(updatedFiles));
       } else {
@@ -181,9 +189,68 @@ export const YandexDiskExplorer: React.FC<YandexDiskExplorerProps> = ({
       setIsRenaming(false);
     }
   };
+
   const cancelDelete = () => {
     setShowDeleteDialog(false);
     setFileToDelete(null);
+  };
+
+  const handleMoveFile = async (
+    sourcePath: string,
+    destinationPath: string
+  ) => {
+    if (!oauthToken) return;
+
+    setLoading(true);
+    const yandexApi = new YandexApi();
+
+    try {
+      // 1. Очищаем пути
+      const cleanSourcePath = sourcePath
+        .replace(/^disk:\//g, "")
+        .replace(/^\/+/, "");
+      const targetDir = destinationPath
+        .replace(/^disk:\//g, "")
+        .replace(/^\/+/, "");
+
+      // 2. Разбираем исходный путь
+      const sourcePathParts = cleanSourcePath.split("/");
+
+      // 3. Проверяем, перемещаем ли мы файл вверх по дереву
+      const isMovingUp =
+        cleanSourcePath.includes("/") &&
+        (!targetDir ||
+          targetDir.split("/").length < sourcePathParts.length - 1);
+
+      // 4. Формируем конечный путь
+      const finalDestinationPath = isMovingUp
+        ? targetDir // Если перемещаем вверх, используем только целевую директорию
+        : `${targetDir}`; // Если вниз или на том же уровне
+
+      console.log("Moving file - detailed info:");
+      console.log("Source path:", cleanSourcePath);
+      console.log("Target directory:", targetDir);
+      console.log("Is moving up:", isMovingUp);
+      console.log("Final destination:", finalDestinationPath);
+
+      // Передаем destinationPath как есть, без добавления имени файла
+      const response = await yandexApi.moveFile(
+        cleanSourcePath,
+        finalDestinationPath, // Можно пустой строкой
+        oauthToken
+      );
+
+      if (response.success) {
+        const updatedFiles = await yandexApi.fetchFiles(oauthToken, "/");
+        dispatch(setFiles(updatedFiles));
+      } else {
+        console.error("Ошибка при перемещении файла:", response);
+      }
+    } catch (error) {
+      console.error("Error moving file:", error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const filteredFiles = filterFiles(files);
@@ -217,7 +284,8 @@ export const YandexDiskExplorer: React.FC<YandexDiskExplorerProps> = ({
             openFolders={openFolders}
             toggleFolder={toggleFolder}
             onDeleteFile={handleDeleteFile}
-            onRenameFile={handleRenameFile} // Pass the rename handler
+            onRenameFile={handleRenameFile}
+            onMoveFile={handleMoveFile}
           />
         </>
       )}

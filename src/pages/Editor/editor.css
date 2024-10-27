@@ -4,7 +4,7 @@
   align-items: center;
   justify-content: center;
   height: 100vh;
-  background-color: #f9f9f9;
+  background-color: #fff;
   padding: 20px;
 }
 
@@ -77,8 +77,11 @@ h1 {
 }
 
 .start-btn {
+  display: flex;
+  justify-content: center !important;
+  align-items: center;
   margin-top: 20px;
-  padding: 10px 20px;
+  padding: 10px 20px !important;
   background-color: #ffcc00;
   color: #000;
   border: none;

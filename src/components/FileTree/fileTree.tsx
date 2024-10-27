@@ -1,5 +1,6 @@
 import React, { memo, useState, useRef, useEffect, useCallback } from "react";
 import { File } from "../../api/fileApi";
+import "./fileTree.css";
 
 interface FileTreeProps {
   files: File[];
@@ -9,6 +10,7 @@ interface FileTreeProps {
   toggleFolder: (folderPath: string) => void;
   onDeleteFile: (filePath: string) => void;
   onRenameFile: (oldPath: string, newPath: string) => void;
+  onMoveFile: (sourcePath: string, destinationPath: string) => Promise<void>;
 }
 
 const FileTree: React.FC<FileTreeProps> = ({
@@ -19,37 +21,42 @@ const FileTree: React.FC<FileTreeProps> = ({
   toggleFolder,
   onDeleteFile,
   onRenameFile,
+  onMoveFile,
 }) => {
   const [menuFilePath, setMenuFilePath] = useState<string | null>(null);
+  const [draggedOver, setDraggedOver] = useState<string | null>(null);
 
-  const isSupportedFormat = (fileName: string) => {
-    return fileName.endsWith(".txt");
+  // Создаем корневой файл
+  const rootFile: File = {
+    name: "Ваш диск",
+    path: "disk:/",
+    type: "dir",
+    mime_type: "directory",
+    children: files,
   };
 
   return (
-    <ul className="file-tree">
-      {files.map((file) => (
-        <MemoizedFileNode
-          key={file.path}
-          file={file}
-          activeFilePath={activeFilePath}
-          onFileClick={onFileClick}
-          openFolders={openFolders}
-          toggleFolder={toggleFolder}
-          onDeleteFile={onDeleteFile}
-          onRenameFile={onRenameFile}
-          isSupportedFormat={
-            file.type === "file" && isSupportedFormat(file.name)
-          }
-          menuFilePath={menuFilePath}
-          setMenuFilePath={setMenuFilePath}
-        />
-      ))}
-    </ul>
+    <div className="file-explorer">
+      <FileNode
+        file={rootFile}
+        activeFilePath={activeFilePath}
+        onFileClick={onFileClick}
+        openFolders={openFolders}
+        toggleFolder={toggleFolder}
+        onDeleteFile={onDeleteFile}
+        onRenameFile={onRenameFile}
+        onMoveFile={onMoveFile}
+        menuFilePath={menuFilePath}
+        setMenuFilePath={setMenuFilePath}
+        draggedOver={draggedOver}
+        setDraggedOver={setDraggedOver}
+        isRootNode={true}
+      />
+    </div>
   );
 };
 
-const FileNode: React.FC<{
+interface FileNodeProps {
   file: File;
   activeFilePath: string | null;
   onFileClick: (filePath: string) => void;
@@ -57,10 +64,15 @@ const FileNode: React.FC<{
   toggleFolder: (folderPath: string) => void;
   onDeleteFile: (filePath: string) => void;
   onRenameFile: (oldPath: string, newPath: string) => void;
-  isSupportedFormat: boolean;
+  onMoveFile: (sourcePath: string, destinationPath: string) => Promise<void>;
   menuFilePath: string | null;
   setMenuFilePath: (filePath: string | null) => void;
-}> = ({
+  draggedOver: string | null;
+  setDraggedOver: (filePath: string | null) => void;
+  isRootNode?: boolean;
+}
+
+const FileNode: React.FC<FileNodeProps> = ({
   file,
   activeFilePath,
   onFileClick,
@@ -68,23 +80,22 @@ const FileNode: React.FC<{
   toggleFolder,
   onDeleteFile,
   onRenameFile,
-  isSupportedFormat,
+  onMoveFile,
   menuFilePath,
   setMenuFilePath,
+  draggedOver,
+  setDraggedOver,
+  isRootNode = false,
 }) => {
   const isOpen = openFolders.has(file.path);
   const isActive = activeFilePath === file.path;
   const nodeRef = useRef<HTMLLIElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const [isDragging, setIsDragging] = useState(false);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (
-        nodeRef.current &&
-        !nodeRef.current.contains(event.target as Node) &&
-        menuRef.current &&
-        !menuRef.current.contains(event.target as Node)
-      ) {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
         setMenuFilePath(null);
       }
     };
@@ -94,6 +105,84 @@ const FileNode: React.FC<{
       document.removeEventListener("mousedown", handleClickOutside);
     };
   }, [setMenuFilePath]);
+
+  const handleDragStart = useCallback(
+    (e: React.DragEvent) => {
+      e.stopPropagation();
+      e.dataTransfer.setData("text/plain", file.path);
+      setIsDragging(true);
+    },
+    [file.path]
+  );
+
+  const handleDragEnd = useCallback(() => {
+    setIsDragging(false);
+    setDraggedOver(null);
+  }, [setDraggedOver]);
+
+  const handleDragOver = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      if (file.type === "dir") {
+        setDraggedOver(file.path);
+        e.dataTransfer.dropEffect = "move";
+      }
+    },
+    [file.path, file.type, setDraggedOver]
+  );
+
+  const handleDragLeave = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setDraggedOver(null);
+    },
+    [setDraggedOver]
+  );
+
+  const handleDrop = useCallback(
+    async (e: React.DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      const sourcePath = e.dataTransfer
+        .getData("text/plain")
+        .replace(/^disk:\//g, "");
+      if (!sourcePath) return;
+
+      // Проверяем, является ли целевая директория корневой
+      if (isRootNode || file.path === "disk:/") {
+        console.log("Moving to root directory");
+        console.log("Source path:", sourcePath);
+
+        // Получаем только имя файла из исходного пути
+        const fileName = sourcePath.split("/").pop();
+        if (!fileName) return;
+
+        // Для корневой директории передаем пустой путь
+        await onMoveFile(sourcePath, "");
+        setDraggedOver(null);
+        return;
+      }
+
+      // Для остальных случаев используем обычную логику
+      const targetDir = file.path.replace(/^disk:\//g, "");
+
+      if (sourcePath === targetDir) return;
+      if (targetDir.startsWith(sourcePath + "/")) return;
+      if (file.type !== "dir") return;
+
+      try {
+        await onMoveFile(sourcePath, targetDir);
+        setDraggedOver(null);
+      } catch (error) {
+        console.error("Error moving file:", error);
+      }
+    },
+    [file, onMoveFile, setDraggedOver, isRootNode]
+  );
 
   const handleDeleteClick = useCallback(
     (e: React.MouseEvent) => {
@@ -109,7 +198,15 @@ const FileNode: React.FC<{
       e.stopPropagation();
       const newName = prompt("Введите новое имя файла:", file.name);
       if (newName && newName !== file.name) {
-        onRenameFile(file.path, newName);
+        const currentPath = file.path.replace(/^disk:\//g, "");
+        const parentPath = currentPath.substring(
+          0,
+          currentPath.lastIndexOf("/")
+        );
+        console.log("Parent path:", parentPath);
+        const newPath = parentPath ? `${parentPath}/${newName}` : newName;
+        console.log("New path:", newPath);
+        onRenameFile(currentPath, newPath);
       }
       setMenuFilePath(null);
     },
@@ -119,8 +216,19 @@ const FileNode: React.FC<{
   const handleMenuToggle = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation();
-      e.preventDefault();
-      setMenuFilePath(menuFilePath === file.path ? null : file.path);
+
+      if (menuFilePath === file.path) {
+        setMenuFilePath(null);
+      } else {
+        setMenuFilePath(file.path);
+        // Позиционируем меню рядом с курсором
+        const menu = menuRef.current;
+        if (menu) {
+          const rect = (e.target as HTMLElement).getBoundingClientRect();
+          menu.style.top = `${rect.top}px`;
+          menu.style.left = `${rect.right + 5}px`; // Добавляем небольшой отступ
+        }
+      }
     },
     [file.path, menuFilePath, setMenuFilePath]
   );
@@ -128,8 +236,19 @@ const FileNode: React.FC<{
   return (
     <li
       ref={nodeRef}
-      className={isActive ? "active" : ""}
-      style={{ position: "relative" }}
+      className={`file-node ${isRootNode ? "root-node" : ""} ${
+        isActive ? "active" : ""
+      } ${isDragging ? "dragging" : ""} ${
+        draggedOver === file.path ? "drag-over" : ""
+      }`}
+      draggable={!isRootNode}
+      onDragStart={!isRootNode ? handleDragStart : undefined}
+      onDragEnd={!isRootNode ? handleDragEnd : undefined}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+      data-type={file.type}
+      data-path={file.path}
     >
       <div
         onClick={() => {
@@ -139,17 +258,16 @@ const FileNode: React.FC<{
             onFileClick(file.path);
           }
         }}
-        style={{
-          cursor: "pointer",
-          opacity: file.type === "file" && !isSupportedFormat ? 0.5 : 1,
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-        }}
-        data-type={file.type}
       >
         <span>
-          {file.type === "dir" ? (isOpen ? "📂" : "📁") : "📄"} {file.name}
+          {isRootNode
+            ? "💾"
+            : file.type === "dir"
+            ? isOpen
+              ? "📂"
+              : "📁"
+            : "📄"}{" "}
+          {file.name}
         </span>
         <span className="more-options" onClick={handleMenuToggle}>
           ⋯
@@ -161,29 +279,41 @@ const FileNode: React.FC<{
           className="context-menu"
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="context-menu-item" onClick={handleRenameClick}>
-            Переименовать
-          </div>
-          <div className="context-menu-item" onClick={handleDeleteClick}>
-            Удалить
-          </div>
+          {!isRootNode && (
+            <>
+              <div className="context-menu-item" onClick={handleRenameClick}>
+                Переименовать
+              </div>
+              <div className="context-menu-item" onClick={handleDeleteClick}>
+                Удалить
+              </div>
+            </>
+          )}
         </div>
       )}
       {isOpen && file.children && file.children.length > 0 && (
-        <FileTree
-          files={file.children}
-          activeFilePath={activeFilePath}
-          onFileClick={onFileClick}
-          openFolders={openFolders}
-          toggleFolder={toggleFolder}
-          onDeleteFile={onDeleteFile}
-          onRenameFile={onRenameFile}
-        />
+        <ul className="file-tree">
+          {file.children.map((childFile) => (
+            <FileNode
+              key={childFile.path}
+              file={childFile}
+              activeFilePath={activeFilePath}
+              onFileClick={onFileClick}
+              openFolders={openFolders}
+              toggleFolder={toggleFolder}
+              onDeleteFile={onDeleteFile}
+              onRenameFile={onRenameFile}
+              onMoveFile={onMoveFile}
+              menuFilePath={menuFilePath}
+              setMenuFilePath={setMenuFilePath}
+              draggedOver={draggedOver}
+              setDraggedOver={setDraggedOver}
+            />
+          ))}
+        </ul>
       )}
     </li>
   );
 };
 
-const MemoizedFileNode = memo(FileNode);
-
-export default FileTree;
+export default memo(FileTree);

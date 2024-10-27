@@ -1,0 +1,129 @@
+.file-explorer {
+  height: 100%;
+  padding: 4px;
+  box-sizing: border-box;
+  background-color: #fff;
+}
+
+.file-tree {
+  list-style: none;
+  padding-left: 12px;
+  margin: 0;
+  font-size: 13px;
+}
+
+.file-explorer > li > .file-tree {
+  padding-left: 0;
+}
+
+.file-node {
+  position: relative;
+  transition: all 0.2s ease;
+  margin: 1px 0;
+  list-style-type: none;
+}
+
+.file-node::marker {
+  display: none;
+}
+
+.file-node.root-node {
+  margin-bottom: 4px;
+}
+
+.file-node.root-node > div {
+  background-color: #f8f9fa;
+  border: 1px solid #eee;
+  margin-bottom: 2px;
+}
+
+.file-node > div {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 3px 6px;
+  border-radius: 3px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.context-menu {
+  position: fixed; /* меняем на fixed для правильного позиционирования */
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  z-index: 1000;
+  min-width: 160px;
+  margin-top: -5px;
+}
+
+.context-menu-item {
+  padding: 8px 16px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  white-space: nowrap;
+  color: #333;
+  font-size: 13px;
+}
+
+.context-menu-item:hover {
+  background-color: #f0f0f0;
+}
+
+/* Добавляем разделитель между пунктами меню */
+.context-menu-item:not(:last-child) {
+  border-bottom: 1px solid #eee;
+}
+
+.file-node span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.file-node span:first-child {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.more-options {
+  opacity: 0;
+  padding: 2px 6px;
+  cursor: pointer;
+  transition: opacity 0.2s;
+  font-size: 14px;
+  color: #666;
+}
+
+.file-node > div:hover .more-options {
+  opacity: 1;
+}
+
+.file-node.active > div {
+  background-color: rgba(33, 150, 243, 0.1);
+}
+
+.file-node.drag-over > div {
+  background-color: rgba(33, 150, 243, 0.08);
+  border: 1px dashed #2196f3;
+}
+
+.file-node.dragging {
+  opacity: 0.5;
+}
+
+/* Убираем скроллбар */
+.file-tree,
+.file-explorer {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.file-tree::-webkit-scrollbar,
+.file-explorer::-webkit-scrollbar {
+  display: none;
+}

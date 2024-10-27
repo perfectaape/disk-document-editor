@@ -12,7 +12,8 @@ export class YandexApi implements IFileAPI {
 
   async fetchFiles(oauthToken: string, path: string = "/"): Promise<File[]> {
     try {
-      const response: AxiosResponse<File> = await this.apiClient.get(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const response: AxiosResponse<any> = await this.apiClient.get(
         "/resources",
         {
           headers: {
@@ -145,6 +146,7 @@ export class YandexApi implements IFileAPI {
       throw error;
     }
   }
+
   async deleteFile(
     filePath: string,
     oauthToken: string
@@ -254,5 +256,48 @@ export class YandexApi implements IFileAPI {
     throw new Error(
       "Превышено максимальное количество попыток проверки статуса операции"
     );
+  }
+
+  async moveFile(
+    sourcePath: string,
+    destinationPath: string,
+    oauthToken: string
+  ): Promise<{ success: boolean }> {
+    try {
+      const fileName = sourcePath.split("/").pop();
+      if (!fileName) {
+        console.error("Invalid file name");
+        return { success: false };
+      }
+
+      // Формируем путь назначения
+      const finalPath = destinationPath
+        ? `${destinationPath}/${fileName}`
+        : fileName;
+
+      console.log("Moving file22:");
+      console.log("From:", sourcePath);
+      console.log("To:", finalPath);
+
+      const response = await this.apiClient.post("/resources/move", null, {
+        headers: {
+          Authorization: `OAuth ${oauthToken}`,
+        },
+        params: {
+          from: sourcePath,
+          path: finalPath, // Используем правильно сформированный путь
+          overwrite: false,
+        },
+      });
+
+      if (response.status === 202 && response.data.href) {
+        await this.waitForOperation(response.data.href, oauthToken);
+      }
+
+      return { success: true };
+    } catch (error) {
+      console.error("Error moving file:", error);
+      return { success: false };
+    }
   }
 }
