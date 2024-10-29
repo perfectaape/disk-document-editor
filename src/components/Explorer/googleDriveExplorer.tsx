@@ -92,23 +92,26 @@ export const GoogleDriveExplorer: React.FC<GoogleDriveExplorerProps> = ({
         .map((file) => {
           if (file.type === "dir") {
             const filteredChildren = filterFiles(file.children || []);
-            if (
-              filteredChildren.length > 0 ||
-              (!showOnlySupported &&
-                file.name.toLowerCase().includes(searchQuery))
-            ) {
-              return { ...file, children: filteredChildren };
-            }
-          } else if (
-            file.name.toLowerCase().includes(searchQuery) &&
+            return {
+              ...file,
+              children: filteredChildren.length > 0 ? filteredChildren : undefined,
+            };
+          }
+          return file;
+        })
+        .filter((file) => {
+          const matchesSearchQuery = file.name.toLowerCase().includes(searchQuery);
+          if (file.type === "dir") {
+            return (
+              matchesSearchQuery || (file.children && file.children.length > 0)
+            );
+          }
+          return (
+            matchesSearchQuery &&
             (!showOnlySupported ||
               isSupportedFormat(file.name, file.mimeType || ""))
-          ) {
-            return file;
-          }
-          return undefined;
-        })
-        .filter((file): file is File => file !== undefined);
+          );
+        });
     },
     [searchQuery, showOnlySupported, isSupportedFormat]
   );

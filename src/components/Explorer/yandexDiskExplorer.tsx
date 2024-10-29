@@ -107,27 +107,19 @@ export const YandexDiskExplorer: React.FC<YandexDiskExplorerProps> = ({
         .map((file) => {
           if (file.type === "dir") {
             const filteredChildren = filterFiles(file.children || []);
-            return {
-              ...file,
-              children:
-                filteredChildren.length > 0 ? filteredChildren : undefined,
-            };
+            return filteredChildren.length > 0 ? { ...file, children: filteredChildren } : null;
           }
           return file;
         })
-        .filter((file) => {
-          const matchesSearchQuery = file.name
-            .toLowerCase()
-            .includes(searchQuery);
+        .filter((file): file is File => {
+          if (!file) return false;
+          const matchesSearchQuery = file.name.toLowerCase().includes(searchQuery);
           if (file.type === "dir") {
-            return (
-              matchesSearchQuery || (file.children && file.children.length > 0)
-            );
+            return matchesSearchQuery || ((file.children ?? []).length > 0);
           }
           return (
             matchesSearchQuery &&
-            (!showOnlySupported ||
-              isSupportedFormat(file.name, file.mime_type || ""))
+            (!showOnlySupported || isSupportedFormat(file.name, file.mime_type || ""))
           );
         });
     },

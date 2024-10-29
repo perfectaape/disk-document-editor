@@ -30,7 +30,7 @@ function transformGoogleFile(file: GoogleDriveFile): File {
   return {
     name: file.name,
     path: file.id,
-    mimeType: file.mimeType, // Изменено с mime_type на mimeType
+    mimeType: file.mimeType,
     type:
       file.mimeType === "application/vnd.google-apps.folder" ? "dir" : "file",
   };
@@ -95,13 +95,16 @@ export class GoogleApi implements IFileAPI {
     signal: AbortSignal
   ): Promise<string | undefined> {
     try {
-      const response = await axios.get(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
-        headers: {
-          Authorization: `Bearer ${oauthToken}`,
-        },
-        responseType: 'text',
-        signal,
-      });
+      const response = await axios.get(
+        `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
+        {
+          headers: {
+            Authorization: `Bearer ${oauthToken}`,
+          },
+          responseType: "text",
+          signal,
+        }
+      );
 
       return response.data;
     } catch (error) {
@@ -129,12 +132,16 @@ export class GoogleApi implements IFileAPI {
     content: string
   ): Promise<void> {
     try {
-      await axios.patch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`, content, {
-        headers: {
-          "Content-Type": "text/plain",
-          Authorization: `Bearer ${oauthToken}`,
-        },
-      });
+      await axios.patch(
+        `https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`,
+        content,
+        {
+          headers: {
+            "Content-Type": "text/plain",
+            Authorization: `Bearer ${oauthToken}`,
+          },
+        }
+      );
     } catch (error) {
       console.error("Ошибка при сохранении содержимого файла:", error);
       throw error;
@@ -164,7 +171,6 @@ export class GoogleApi implements IFileAPI {
         }
       );
 
-      // Для папок обновляем вложенные файлы
       if (response.data.mimeType === "application/vnd.google-apps.folder") {
         const filesInFolder = await this.apiClient.get<GoogleDriveFileList>(
           "/files",
@@ -215,7 +221,6 @@ export class GoogleApi implements IFileAPI {
     oauthToken: string
   ): Promise<{ success: boolean }> {
     try {
-      // Получаем текущих родителей исходного файла
       const sourceFile = await this.apiClient.get<GoogleDriveFileMetadata>(
         `/files/${sourceId}`,
         {
@@ -229,55 +234,26 @@ export class GoogleApi implements IFileAPI {
       );
 
       const currentParents = sourceFile.data.parents || [];
-      console.log("Current parents:", currentParents);
 
-      // Если перемещаем в корень, используем "root" как идентификатор
       const targetParent = destinationId || "root";
 
-      // Проверяем, не является ли файл уже в целевой папке
       if (currentParents.includes(targetParent)) {
-        console.log("Файл уже находится в целевой папке.");
         return { success: true };
       }
 
-      // Удаляем текущих родителей, чтобы переместить файл
       const removeParents = currentParents.join(",");
-      console.log("Removing parents:", removeParents);
-      console.log("Adding parent:", targetParent);
 
-      // Отправляем запрос на перемещение файла
-      const response = await this.apiClient.patch(
-        `/files/${sourceId}`,
-        null, // Поскольку мы не обновляем содержимое файла, тело запроса может быть null
-        {
-          headers: {
-            Authorization: `Bearer ${oauthToken}`,
-            "Content-Type": "application/json",
-          },
-          params: {
-            addParents: targetParent,
-            removeParents: removeParents,
-            fields: "id, parents",
-          },
-        }
-      );
-
-      console.log("Move response:", response.data);
-
-      // Проверяем, что файл действительно перемещен
-      const updatedFile = await this.apiClient.get<GoogleDriveFileMetadata>(
-        `/files/${sourceId}`,
-        {
-          headers: {
-            Authorization: `Bearer ${oauthToken}`,
-          },
-          params: {
-            fields: "parents",
-          },
-        }
-      );
-
-      console.log("Updated parents:", updatedFile.data.parents);
+      const response = await this.apiClient.patch(`/files/${sourceId}`, null, {
+        headers: {
+          Authorization: `Bearer ${oauthToken}`,
+          "Content-Type": "application/json",
+        },
+        params: {
+          addParents: targetParent,
+          removeParents: removeParents,
+          fields: "id, parents",
+        },
+      });
 
       return { success: response.status === 200 };
     } catch (error) {
@@ -294,22 +270,24 @@ export class GoogleApi implements IFileAPI {
     oauthToken: string
   ): Promise<{ success: boolean }> {
     try {
-      // Разделяем путь на родительский ID и имя папки
-      const [parentId, folderName] = path.split("/").reduce((acc, part, index, arr) => {
-        if (index === arr.length - 1) {
-          acc[1] = part; // Последний элемент - имя папки
-        } else {
-          acc[0] = acc[0] ? `${acc[0]}/${part}` : part; // Остальные - родительский путь
-        }
-        return acc;
-      }, ["", ""]);
+      const [parentId, folderName] = path.split("/").reduce(
+        (acc, part, index, arr) => {
+          if (index === arr.length - 1) {
+            acc[1] = part;
+          } else {
+            acc[0] = acc[0] ? `${acc[0]}/${part}` : part;
+          }
+          return acc;
+        },
+        ["", ""]
+      );
 
       const response = await this.apiClient.post(
         "/files",
         {
           name: folderName,
           mimeType: "application/vnd.google-apps.folder",
-          parents: [parentId || "root"], // Используем "root", если parentId пуст
+          parents: [parentId || "root"],
         },
         {
           headers: {
@@ -331,42 +309,38 @@ export class GoogleApi implements IFileAPI {
     content: string = ""
   ): Promise<{ success: boolean }> {
     try {
-      // Разделяем путь на родительский ID и имя файла
-      const [parentId, fileName] = path.split("/").reduce((acc, part, index, arr) => {
-        if (index === arr.length - 1) {
-          acc[1] = part; // Последний элемент - имя файла
-        } else {
-          acc[0] = acc[0] ? `${acc[0]}/${part}` : part; // Остальные - родительский путь
-        }
-        return acc;
-      }, ["", ""]);
+      const [parentId, fileName] = path.split("/").reduce(
+        (acc, part, index, arr) => {
+          if (index === arr.length - 1) {
+            acc[1] = part;
+          } else {
+            acc[0] = acc[0] ? `${acc[0]}/${part}` : part;
+          }
+          return acc;
+        },
+        ["", ""]
+      );
 
-      // Step 1: Create a file metadata
       const fileMetadata = {
         name: fileName,
-        mimeType: "application/vnd.google-apps.document", // Указываем правильный MIME-тип
-        parents: [parentId || "root"], // Используем "root", если parentId пуст
+        mimeType: "text/plain",
+        parents: [parentId || "root"],
       };
 
-      const createResponse = await this.apiClient.post(
-        "/files",
-        fileMetadata,
-        {
-          headers: {
-            Authorization: `Bearer ${oauthToken}`,
-            "Content-Type": "application/json",
-          },
-        }
-      );
+      const createResponse = await this.apiClient.post("/files", fileMetadata, {
+        headers: {
+          Authorization: `Bearer ${oauthToken}`,
+          "Content-Type": "application/json",
+        },
+      });
 
       const fileId = createResponse.data.id;
 
-      // Step 2: Upload content to the file
       const uploadUrl = `https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`;
 
       await axios.patch(uploadUrl, content, {
         headers: {
-          "Content-Type": "text/plain", // Указываем MIME-тип для содержимого
+          "Content-Type": "text/plain",
           Authorization: `Bearer ${oauthToken}`,
         },
       });

@@ -298,12 +298,16 @@ const FileNode: React.FC<FileNodeProps> = ({
               </div>
             </>
           )}
-          <div className="context-menu-item" onClick={handleCreateFolder}>
-            Создать папку
-          </div>
-          <div className="context-menu-item" onClick={handleCreateFile}>
-            Создать файл
-          </div>
+          {(isRootNode || file.type === "dir") && (
+            <>
+              <div className="context-menu-item" onClick={handleCreateFolder}>
+                Создать папку
+              </div>
+              <div className="context-menu-item" onClick={handleCreateFile}>
+                Создать файл
+              </div>
+            </>
+          )}
         </div>
       )}
       {isOpen && file.children && file.children.length > 0 && (

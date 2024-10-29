@@ -57,7 +57,7 @@ export const FileManager: React.FC = () => {
 
   useEffect(() => {
     if (filePath) {
-      setIsFileDeleted(false); // Reset the deleted state when a new file is opened
+      setIsFileDeleted(false);
     }
   }, [filePath]);
 

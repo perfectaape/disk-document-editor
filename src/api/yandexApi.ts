@@ -299,11 +299,10 @@ export class YandexApi implements IFileAPI {
             Authorization: `OAuth ${oauthToken}`,
           },
           params: {
-            path: normalizedPath, // Используем нормализованный путь
+            path: normalizedPath,
             overwrite: true,
           },
-        }
-      );
+        });
 
       await axios.put(uploadLinkResponse.data.href, content, {
         headers: {
