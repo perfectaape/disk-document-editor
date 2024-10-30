@@ -66,6 +66,25 @@ export const YandexDiskExplorer: React.FC<YandexDiskExplorerProps> = ({
     );
   }, [openFolders]);
 
+  useEffect(() => {
+    const checkFileExists = async () => {
+      if (activeFilePath && oauthToken) {
+        try {
+          await yandexApi.fetchFileMetadata(
+            activeFilePath.replace(/^disk:\//g, ""),
+            oauthToken
+          );
+        } catch (error) {
+          console.error("Файл не найден:", error);
+          dispatch(setActiveFilePath(null));
+          navigate('/explorer/yandex');
+        }
+      }
+    };
+
+    checkFileExists();
+  }, [activeFilePath, oauthToken, yandexApi, navigate, dispatch]);
+
   const handleFileClick = useCallback(
     (filePath: string) => {
       dispatch(setActiveFilePath(filePath));
@@ -183,6 +202,13 @@ export const YandexDiskExplorer: React.FC<YandexDiskExplorerProps> = ({
       );
 
       if (response.success) {
+        if (activeFilePath === `disk:/${cleanOldPath}`) {
+          dispatch(setActiveFilePath(null));
+          onFileDeleted();
+          navigate('/explorer/yandex');
+        }
+
+        await new Promise(resolve => setTimeout(resolve, 1000));
         const updatedFiles = await yandexApi.fetchFiles(oauthToken, "/");
         dispatch(setFiles(updatedFiles));
       } else {

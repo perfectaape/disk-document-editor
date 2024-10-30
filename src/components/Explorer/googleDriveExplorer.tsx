@@ -59,6 +59,22 @@ export const GoogleDriveExplorer: React.FC<GoogleDriveExplorerProps> = ({
     );
   }, [openFolders]);
 
+  useEffect(() => {
+    const checkFileExists = async () => {
+      if (activeFilePath && oauthToken) {
+        try {
+          await googleApi.fetchFileMetadata(activeFilePath, oauthToken);
+        } catch (error) {
+          console.error("Файл не найден:", error);
+          setActiveFilePath(null);
+          navigate('/explorer/google');
+        }
+      }
+    };
+
+    checkFileExists();
+  }, [activeFilePath, oauthToken, googleApi, navigate]);
+
   const handleFileClick = useCallback(
     (fileId: string) => {
       setActiveFilePath(fileId);

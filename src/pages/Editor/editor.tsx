@@ -21,6 +21,20 @@ interface FileMetadata {
   owner?: string;
 }
 
+// Добавляем функцию форматирования даты
+const formatDate = (dateString: string | undefined): string => {
+  if (!dateString) return '';
+  
+  const date = new Date(dateString);
+  return date.toLocaleString('ru-RU', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+};
+
 export const Editor: React.FC<EditorProps> = React.memo(({ isFileDeleted }) => {
   const { service, filePath } = useParams<{
     service: "yandex" | "google";
@@ -262,9 +276,17 @@ export const Editor: React.FC<EditorProps> = React.memo(({ isFileDeleted }) => {
             <h2>Инфо</h2>
             <ul>
               <li>Имя файла: {fileMetadata.name}</li>
-              <li>Размер: {fileMetadata.size} байт</li>
-              <li>Создан: {fileMetadata.createdDate}</li>
-              <li>Изменён: {fileMetadata.modifiedDate}</li>
+              <li>Размер: {fileMetadata.size || 0} байт</li>
+  
+              {service === "yandex" && (
+                <li>Создан: {formatDate(fileMetadata.createdDate)}</li>
+              )}
+              {service === "google" && (
+                <>
+                  <li>Создан: {formatDate(fileMetadata.createdDate)}</li>
+                  <li>Изменён: {formatDate(fileMetadata.modifiedDate)}</li>
+                </>
+              )}
               {service === "yandex" && <li>Путь: {fileMetadata.path}</li>}
               {service === "google" && <li>Владелец: {fileMetadata.owner}</li>}
             </ul>

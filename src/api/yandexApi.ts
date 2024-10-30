@@ -103,19 +103,27 @@ export class YandexApi implements IFileAPI {
 
   async fetchFileMetadata(path: string, oauthToken: string): Promise<File> {
     try {
-      const response: AxiosResponse<File> = await this.apiClient.get(
-        "/resources",
-        {
-          headers: {
-            Authorization: `OAuth ${oauthToken}`,
-          },
-          params: {
-            path: path,
-          },
-        }
-      );
+      const response = await this.apiClient.get("/resources", {
+        headers: {
+          Authorization: `OAuth ${oauthToken}`,
+        },
+        params: {
+          path: path,
+        },
+      });
 
-      return response.data;
+      const data = response.data;
+      return {
+        name: data.name,
+        path: data.path,
+        type: data.type,
+        mime_type: data.mime_type,
+        size: data.size,
+        created: data.custom_properties?.original_created || data.created,
+        modified: data.modified,
+        createdDate: data.custom_properties?.original_created || data.created,
+        modifiedDate: data.modified,
+      };
     } catch (error) {
       console.error("Ошибка при получении метаданных файла:", error);
       throw error;
@@ -128,24 +136,42 @@ export class YandexApi implements IFileAPI {
     content: string
   ): Promise<void> {
     try {
-      const uploadLinkResponse: AxiosResponse<{ href: string }> =
-        await this.apiClient.get("/resources/upload", {
-          headers: {
-            Authorization: `OAuth ${oauthToken}`,
-          },
-          params: {
-            path: path,
-            overwrite: true,
-          },
-        });
+      const fileMetadata = await this.fetchFileMetadata(path, oauthToken);
+      const createdDate = fileMetadata.created || fileMetadata.createdDate;
+
+      const uploadLinkResponse = await this.apiClient.get("/resources/upload", {
+        headers: {
+          Authorization: `OAuth ${oauthToken}`,
+        },
+        params: {
+          path: path,
+          overwrite: true,
+        },
+      });
 
       await axios.put(uploadLinkResponse.data.href, content, {
         headers: {
           "Content-Type": "text/plain",
         },
       });
+
+      await this.apiClient.patch(
+        "/resources",
+        {},
+        {
+          headers: {
+            Authorization: `OAuth ${oauthToken}`,
+          },
+          params: {
+            path: path,
+            custom_properties: {
+              original_created: createdDate,
+            },
+          },
+        }
+      );
     } catch (error) {
-      console.error("Ошибка при сохранении содержимого документа:", error);
+      console.error("Ошибка при сохранении документа:", error);
       throw error;
     }
   }
@@ -166,11 +192,16 @@ export class YandexApi implements IFileAPI {
           params: {
             from: fileId,
             path: newName,
+            overwrite: false,
           },
         }
       );
 
-      return { success: response.status === 202 };
+      if (response.status === 202 && response.data.href) {
+        await this.waitForOperation(response.data.href, oauthToken);
+      }
+
+      return { success: true };
     } catch (error) {
       console.error("Ошибка при переименовании файла:", error);
       return { success: false };
@@ -255,7 +286,8 @@ export class YandexApi implements IFileAPI {
   private async waitForOperation(
     operationHref: string,
     oauthToken: string,
-    maxAttempts: number = 10
+    maxAttempts: number = 20,
+    delay: number = 500
   ): Promise<void> {
     let attempts = 0;
 
@@ -276,7 +308,7 @@ export class YandexApi implements IFileAPI {
           throw new Error("Операция завершилась с ошибкой");
         }
 
-        await new Promise((resolve) => setTimeout(resolve, 1000));
+        await new Promise((resolve) => setTimeout(resolve, delay));
         attempts++;
       } catch (error) {
         console.error("Ошибка при проверке статуса операции:", error);
@@ -285,16 +317,19 @@ export class YandexApi implements IFileAPI {
     }
 
     throw new Error(
-      "Превышено максимально�� количество попыток проверки статуса операции"
+      "Превышено максимальное количество попыток проверки статуса операции"
     );
   }
 
-  async createFile(path: string, oauthToken: string, content: string = ""): Promise<{ success: boolean }> {
+  async createFile(
+    path: string,
+    oauthToken: string,
+    content: string = ""
+  ): Promise<{ success: boolean }> {
     try {
       const normalizedPath = path.startsWith("disk:/") ? path : `disk:/${path}`;
-      const uploadLinkResponse: AxiosResponse<{ href: string }> = await this.apiClient.get(
-        "/resources/upload",
-        {
+      const uploadLinkResponse: AxiosResponse<{ href: string }> =
+        await this.apiClient.get("/resources/upload", {
           headers: {
             Authorization: `OAuth ${oauthToken}`,
           },
