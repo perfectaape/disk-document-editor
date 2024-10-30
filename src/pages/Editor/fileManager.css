@@ -1,7 +1,7 @@
 .file-manager {
   display: flex;
   height: 100vh;
-  background-color: #f5f5f5;
+  background-color: #fff;
 }
 
 .explorer-container {
@@ -23,7 +23,6 @@
   justify-content: center;
   align-items: center;
   height: 100%;
-  margin-left: 350px;
   flex: 1;
   font-size: 18px;
   color: #666;
@@ -33,7 +32,7 @@
 .editor-container {
   flex: 1;
   background-color: #fff;
-  margin-left: 0px;
+  margin-left: 350px; /* Отступ слева, чтобы не заходить под эксплорер */
 }
 
 /* Модальное окно */

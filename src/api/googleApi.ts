@@ -119,11 +119,22 @@ export class GoogleApi implements IFileAPI {
         Authorization: `Bearer ${oauthToken}`,
       },
       params: {
-        fields: "id, name, mimeType, createdTime, modifiedTime",
+        fields: "id, name, mimeType, size, createdTime, modifiedTime, owners",
       },
     });
 
-    return response.data;
+    return {
+      name: response.data.name,
+      path: response.data.id,
+      mimeType: response.data.mimeType,
+      type: response.data.mimeType === "application/vnd.google-apps.folder" ? "dir" : "file",
+      size: parseInt(response.data.size || "0"),
+      created: response.data.createdTime,
+      modified: response.data.modifiedTime,
+      owner: response.data.owners?.[0]?.displayName || "",
+      createdDate: response.data.createdTime,
+      modifiedDate: response.data.modifiedTime
+    };
   }
 
   async saveDocumentContent(

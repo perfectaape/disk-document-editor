@@ -12,6 +12,15 @@ interface EditorProps {
   isFileDeleted: boolean;
 }
 
+interface FileMetadata {
+  name: string;
+  size: number;
+  createdDate: string;
+  modifiedDate: string;
+  path?: string;
+  owner?: string;
+}
+
 export const Editor: React.FC<EditorProps> = React.memo(({ isFileDeleted }) => {
   const { service, filePath } = useParams<{
     service: "yandex" | "google";
@@ -19,11 +28,13 @@ export const Editor: React.FC<EditorProps> = React.memo(({ isFileDeleted }) => {
   }>();
   const [content, setContent] = useState<string>("");
   const [saving, setSaving] = useState<boolean>(false);
-  const [loading, setLoading] = useState<boolean>(true);
   const [unsupportedFormat, setUnsupportedFormat] = useState<boolean>(false);
+  const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
+  const [fileMetadata, setFileMetadata] = useState<FileMetadata | null>(null);
   const navigate = useNavigate();
   const yandexApi = useMemo(() => new YandexApi(), []);
   const googleApi = useMemo(() => new GoogleApi(), []);
+  const [isContentLoading, setIsContentLoading] = useState<boolean>(true);
 
   const checkToken = useCallback(() => {
     const yandexToken = getCookie("yandex_token");
@@ -35,16 +46,30 @@ export const Editor: React.FC<EditorProps> = React.memo(({ isFileDeleted }) => {
     return service === "yandex" ? yandexToken : googleToken;
   }, [navigate, service]);
 
-  const isSupportedFormat = useCallback((mimeType: string) => {
-    return mimeType === "text/plain";
-  }, []);
+  const isSupportedFormat = useCallback(
+    (mimeType: string, fileName: string) => {
+      const supportedMimeTypes = [
+        "text/plain",
+        "text/plain; charset=utf-8",
+        "text/plain; charset=utf-16",
+        "application/x-empty",
+      ];
 
-  const isTextContent = (content: string): boolean => {
-    return /^[\s\S]*$/.test(content);
-  };
+      if (service === "google") {
+        return supportedMimeTypes.includes(mimeType.toLowerCase());
+      }
+
+      return (
+        supportedMimeTypes.includes(mimeType.toLowerCase()) &&
+        fileName.toLowerCase().endsWith(".txt")
+      );
+    },
+    [service]
+  );
 
   const handleFetchDocumentContent = useCallback(
     async (fileName: string, oauthToken: string, signal: AbortSignal) => {
+      setIsContentLoading(true);
       try {
         const fileMetadata =
           service === "yandex"
@@ -54,14 +79,10 @@ export const Editor: React.FC<EditorProps> = React.memo(({ isFileDeleted }) => {
         const mimeType =
           service === "yandex" ? fileMetadata.mime_type : fileMetadata.mimeType;
 
-        if (!isSupportedFormat(mimeType || "")) {
+        if (!isSupportedFormat(mimeType || "", fileName)) {
           setUnsupportedFormat(true);
-          setLoading(false);
           return;
         }
-
-        setLoading(true);
-        setUnsupportedFormat(false);
 
         const content =
           service === "yandex"
@@ -72,16 +93,12 @@ export const Editor: React.FC<EditorProps> = React.memo(({ isFileDeleted }) => {
                 signal
               );
 
-        if (content !== undefined && isTextContent(content)) {
-          setContent(content);
+        if (content === undefined || content === null) {
+          console.error("Ошибка получения содержимого документа");
+          setUnsupportedFormat(true);
         } else {
-          console.error(
-            "Получено пустое или не текстовое содержимое документа"
-          );
-          alert(
-            "Не удалось загрузить содержимое документа. Попробуйте еще раз."
-          );
-          return;
+          setContent(content);
+          setUnsupportedFormat(false);
         }
       } catch (error) {
         const axiosError = error as AxiosError;
@@ -90,12 +107,10 @@ export const Editor: React.FC<EditorProps> = React.memo(({ isFileDeleted }) => {
             "Ошибка при получении содержимого документа:",
             axiosError.message
           );
-          alert(
-            "Не удалось загрузить содержимое документа. Попробуйте еще раз."
-          );
+          setUnsupportedFormat(true);
         }
       } finally {
-        setLoading(false);
+        setIsContentLoading(false);
       }
     },
     [service, yandexApi, googleApi, isSupportedFormat]
@@ -161,7 +176,38 @@ export const Editor: React.FC<EditorProps> = React.memo(({ isFileDeleted }) => {
     navigate(`/explorer/${service}`);
   }, [navigate, service]);
 
-  if (loading) {
+  const updateFileMetadata = useCallback(async () => {
+    const token = checkToken();
+    if (token && filePath) {
+      const decodedPath = decodeURIComponent(filePath);
+      try {
+        const metadata =
+          service === "yandex"
+            ? await yandexApi.fetchFileMetadata(decodedPath, token)
+            : await googleApi.fetchFileMetadata(decodedPath, token);
+
+        setFileMetadata({
+          name: metadata.name,
+          size: metadata.size || 0,
+          createdDate: metadata.created || "",
+          modifiedDate: metadata.modified || "",
+          path: service === "yandex" ? metadata.path : undefined,
+          owner: service === "google" ? metadata.owner : undefined,
+        });
+      } catch (error) {
+        console.error("Ошибка при обновлении метаданных файла:", error);
+      }
+    }
+  }, [service, filePath, checkToken, yandexApi, googleApi]);
+
+  const toggleModal = () => {
+    if (!isModalOpen) {
+      updateFileMetadata();
+    }
+    setIsModalOpen(!isModalOpen);
+  };
+
+  if (isContentLoading) {
     return <Loader />;
   }
 
@@ -171,11 +217,8 @@ export const Editor: React.FC<EditorProps> = React.memo(({ isFileDeleted }) => {
         <button onClick={handleClose} className="close-button">
           Закрыть
         </button>
-        <h1>Неизвестный формат файла</h1>
-        <p>
-          Этот файл не поддерживается для редактирования. Пожалуйста, выберите
-          текстовый файл.
-        </p>
+        <h1>Неподдерживаемый формат файла</h1>
+        <p>Этот файл не поддерживается для редактирования</p>
       </div>
     );
   }
@@ -185,7 +228,7 @@ export const Editor: React.FC<EditorProps> = React.memo(({ isFileDeleted }) => {
       <button onClick={handleClose} className="close-button">
         Закрыть
       </button>
-      <h1>Содержимое документа</h1>
+      <h1>Редактор</h1>
       <textarea
         className="textarea-editor"
         value={content}
@@ -193,15 +236,44 @@ export const Editor: React.FC<EditorProps> = React.memo(({ isFileDeleted }) => {
         rows={10}
         cols={50}
         disabled={isFileDeleted}
+        placeholder="Начните вводить текст..."
       />
+      <div className="editor-buttons">
+        <button
+          className="start-btn"
+          onClick={() => handleSaveDocument(content)}
+          disabled={isFileDeleted}
+        >
+          Сохранить
+        </button>
+        <button
+          onClick={toggleModal}
+          style={{ marginLeft: "20px" }}
+          className="start-btn"
+        >
+          Инфо
+        </button>
+      </div>
       {saving && <div className="loading-indicator"></div>}
-      <button
-        className="start-btn"
-        onClick={() => handleSaveDocument(content)}
-        disabled={isFileDeleted}
-      >
-        Сохранить
-      </button>
+
+      {isModalOpen && fileMetadata && (
+        <div className="modal">
+          <div className="modal-content">
+            <h2>Инфо</h2>
+            <ul>
+              <li>Имя файла: {fileMetadata.name}</li>
+              <li>Размер: {fileMetadata.size} байт</li>
+              <li>Создан: {fileMetadata.createdDate}</li>
+              <li>Изменён: {fileMetadata.modifiedDate}</li>
+              {service === "yandex" && <li>Путь: {fileMetadata.path}</li>}
+              {service === "google" && <li>Владелец: {fileMetadata.owner}</li>}
+            </ul>
+            <button onClick={toggleModal} className="close-modal-btn">
+              Закрыть
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 });

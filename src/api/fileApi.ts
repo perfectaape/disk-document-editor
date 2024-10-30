@@ -31,6 +31,12 @@ export interface File {
   path: string;
   mime_type?: string;
   type: string;
+  size?: number;
+  created?: string;
+  modified?: string;
+  owner?: string;
+  createdDate?: string;
+  modifiedDate?: string;
   _embedded?: {
     items: File[];
   };
