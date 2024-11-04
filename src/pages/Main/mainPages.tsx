@@ -4,7 +4,8 @@ export const MainPages: React.FC = () => {
   const handleYandexLogin = (): void => {
     const clientId: string = import.meta.env.VITE_YANDEX_CLIENT_ID;
     const redirectUri: string = import.meta.env.VITE_REDIRECT_URI;
-    const authUrl: string = `https://oauth.yandex.ru/authorize?response_type=token&client_id=${clientId}&redirect_uri=${redirectUri}&state=yandex`;
+    const scope: string = 'cloud_api:disk.app_folder';
+    const authUrl: string = `https://oauth.yandex.ru/authorize?response_type=token&client_id=${clientId}&redirect_uri=${redirectUri}&scope=${scope}&state=yandex`;
     window.location.href = authUrl;
   };
 

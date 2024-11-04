@@ -17,13 +17,22 @@ const initialState: FileState = {
   activeFilePath: null,
 };
 
+const normalizeFile = (file: File): File => {
+  return {
+    ...file,
+    type: file.type === "dir" ? "dir" : "file",
+    children: Array.isArray(file.children) 
+      ? file.children.map(normalizeFile)
+      : []
+  };
+};
+
 const updateItemPathRecursively = (
   items: File[],
   oldPath: string,
   newPath: string
 ): File[] => {
   return items.map((item) => {
-    console.log("item.path", item.path);
     if (item.path === oldPath) {
       return { ...item, path: newPath };
     }
@@ -40,10 +49,9 @@ const updateItemPathRecursively = (
 const removeItemRecursively = (items: File[], pathToRemove: string): File[] => {
   return items.reduce((acc: File[], item) => {
     if (item.path === pathToRemove) {
-      return acc; // Skip the item to remove it
+      return acc;
     }
     if (item.type === "dir" && item.children) {
-      // Recursively remove from children
       const updatedChildren = removeItemRecursively(
         item.children,
         pathToRemove
@@ -51,7 +59,7 @@ const removeItemRecursively = (items: File[], pathToRemove: string): File[] => {
       if (updatedChildren.length > 0) {
         acc.push({ ...item, children: updatedChildren });
       } else {
-        acc.push({ ...item, children: [] }); // Ensure empty directories are handled
+        acc.push({ ...item, children: [] });
       }
     } else {
       acc.push(item);
@@ -63,17 +71,17 @@ const removeItemRecursively = (items: File[], pathToRemove: string): File[] => {
 export const filesReducer = createReducer(initialState, (builder) => {
   builder
     .addCase(setFiles, (state, action) => {
-      state.files = action.payload;
+      state.files = [...action.payload].map(normalizeFile);
     })
     .addCase(deleteFile, (state, action) => {
-      state.files = removeItemRecursively(state.files, action.payload);
+      state.files = removeItemRecursively([...state.files], action.payload);
     })
     .addCase(setActiveFilePath, (state, action) => {
       state.activeFilePath = action.payload;
     })
     .addCase(renameFile, (state, action) => {
       state.files = updateItemPathRecursively(
-        state.files,
+        [...state.files],
         action.payload.oldPath,
         action.payload.newPath
       );

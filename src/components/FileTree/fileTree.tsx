@@ -1,6 +1,7 @@
 import React, { memo, useState, useRef, useEffect, useCallback } from "react";
-import { File } from "../../api/fileApi";
+import { File, getCookie } from "../../api/fileApi";
 import "./fileTree.css";
+import { YandexApi } from "../../api/yandexApi";
 
 interface FileTreeProps {
   files: File[];
@@ -32,7 +33,7 @@ const FileTree: React.FC<FileTreeProps> = ({
 
   const rootFile: File = {
     name: "Ваш диск",
-    path: "disk:/",
+    path: "app:/",
     type: "dir",
     mime_type: "directory",
     children: files,
@@ -97,10 +98,67 @@ const FileNode: React.FC<FileNodeProps> = ({
   isRootNode = false,
 }) => {
   const isOpen = openFolders.has(file.path);
+  const [folderContents, setFolderContents] = useState<File[]>(
+    file.children || []
+  );
+  const [isLoading, setIsLoading] = useState(false);
   const isActive = activeFilePath === file.path;
   const nodeRef = useRef<HTMLLIElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [folderCache, setFolderCache] = useState<Map<string, File[]>>(
+    new Map()
+  );
+
+  useEffect(() => {
+    if (isRootNode) {
+      setFolderContents(file.children || []);
+    }
+  }, [file.children, isRootNode]);
+
+  useEffect(() => {
+    const loadFolderContents = async () => {
+      if (!isRootNode && file.type === "dir" && isOpen) {
+        if (file.children && file.children.length > 0) {
+          setFolderContents(file.children);
+          return;
+        }
+
+        if (folderCache.has(file.path)) {
+          setFolderContents(folderCache.get(file.path) || []);
+          return;
+        }
+
+        try {
+          setIsLoading(true);
+          const yandexApi = new YandexApi();
+          const oauthToken = getCookie("yandex_token");
+          if (oauthToken) {
+            const contents = await yandexApi.fetchFolderContents(
+              oauthToken,
+              file.path
+            );
+            setFolderCache((prev) => new Map(prev).set(file.path, contents));
+            setFolderContents(contents);
+          }
+        } catch (error) {
+          console.error("Error loading folder contents:", error);
+        } finally {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    loadFolderContents();
+  }, [
+    file.path,
+    file.type,
+    isOpen,
+    folderCache,
+    isRootNode,
+    file.name,
+    file.children,
+  ]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -135,12 +193,18 @@ const FileNode: React.FC<FileNodeProps> = ({
   );
 
   const handleCreateFolder = useCallback(() => {
-    onCreateFolder(file.path);
+    const cleanedPath = file.path.startsWith("app:/")
+      ? file.path
+      : `app:/${file.path}`;
+    onCreateFolder(cleanedPath);
     setMenuFilePath(null);
   }, [file.path, onCreateFolder, setMenuFilePath]);
 
   const handleCreateFile = useCallback(() => {
-    onCreateFile(file.path);
+    const cleanedPath = file.path.startsWith("app:/")
+      ? file.path
+      : `app:/${file.path}`;
+    onCreateFile(cleanedPath);
     setMenuFilePath(null);
   }, [file.path, onCreateFile, setMenuFilePath]);
 
@@ -187,19 +251,24 @@ const FileNode: React.FC<FileNodeProps> = ({
 
       const sourcePath = e.dataTransfer
         .getData("text/plain")
-        .replace(/^disk:\//g, "");
+        .replace(/^(disk:|app:)\/+/, "")
+        .replace(/^\/+/, "");
+
       if (!sourcePath) return;
 
-      if (isRootNode || file.path === "disk:/") {
-        const fileName = sourcePath.split("/").pop();
-        if (!fileName) return;
-
-        await onMoveFile(sourcePath, "");
-        setDraggedOver(null);
+      if (isRootNode || file.path === "app:/") {
+        try {
+          await onMoveFile(sourcePath, "");
+          setDraggedOver(null);
+        } catch (error) {
+          console.error("Error moving file to root:", error);
+        }
         return;
       }
 
-      const targetDir = file.path.replace(/^disk:\//g, "");
+      const targetDir = file.path
+        .replace(/^(disk:|app:)\/+/, "")
+        .replace(/^\/+/, "");
 
       if (sourcePath === targetDir) return;
       if (targetDir.startsWith(sourcePath + "/")) return;
@@ -229,18 +298,57 @@ const FileNode: React.FC<FileNodeProps> = ({
       e.stopPropagation();
       const newName = prompt("Введите новое имя файла:", file.name);
       if (newName && newName !== file.name) {
-        const currentPath = file.path.replace(/^disk:\//g, "");
+        const currentPath = file.path
+          .replace(/^(app:|disk):\/+/g, "")
+          .replace(/^Приложения\/Тестовое-Диск\/?/, "");
+
         const parentPath = currentPath.substring(
           0,
           currentPath.lastIndexOf("/")
         );
+
         const newPath = parentPath ? `${parentPath}/${newName}` : newName;
+
         onRenameFile(currentPath, newPath);
       }
       setMenuFilePath(null);
     },
     [file.path, file.name, onRenameFile, setMenuFilePath]
   );
+  const handleRefreshFolder = useCallback(async () => {
+    if (file.type !== "dir") return;
+
+    setIsLoading(true);
+    try {
+      setFolderCache((prev) => {
+        const newCache = new Map(prev);
+        const pathsToRemove = Array.from(newCache.keys()).filter((cachedPath) =>
+          cachedPath.startsWith(file.path)
+        );
+        pathsToRemove.forEach((path) => newCache.delete(path));
+        return newCache;
+      });
+
+      if (isOpen) {
+        const yandexApi = new YandexApi();
+        const oauthToken = getCookie("yandex_token");
+        if (oauthToken) {
+          const contents = await yandexApi.fetchFolderContents(
+            oauthToken,
+            file.path
+          );
+          setFolderCache((prev) => new Map(prev).set(file.path, contents));
+          setFolderContents(contents);
+        }
+      }
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      setMenuFilePath(null);
+    } catch (error) {
+      console.error("Error refreshing folder:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [file.path, file.type, isOpen, setMenuFilePath]);
 
   return (
     <li
@@ -277,6 +385,7 @@ const FileNode: React.FC<FileNodeProps> = ({
               : "📁"
             : "📄"}{" "}
           {file.name}
+          {isLoading && file.type === "dir" && " ●"}
         </span>
         <span className="more-options" onClick={handleMenuToggle}>
           ⋯
@@ -300,6 +409,9 @@ const FileNode: React.FC<FileNodeProps> = ({
           )}
           {(isRootNode || file.type === "dir") && (
             <>
+              <div className="context-menu-item" onClick={handleRefreshFolder}>
+                Обновить
+              </div>
               <div className="context-menu-item" onClick={handleCreateFolder}>
                 Создать папку
               </div>
@@ -310,27 +422,31 @@ const FileNode: React.FC<FileNodeProps> = ({
           )}
         </div>
       )}
-      {isOpen && file.children && file.children.length > 0 && (
+      {isOpen && file.type === "dir" && (
         <ul className="file-tree">
-          {file.children.map((childFile) => (
-            <FileNode
-              key={childFile.path}
-              file={childFile}
-              activeFilePath={activeFilePath}
-              onFileClick={onFileClick}
-              openFolders={openFolders}
-              toggleFolder={toggleFolder}
-              onDeleteFile={onDeleteFile}
-              onRenameFile={onRenameFile}
-              onMoveFile={onMoveFile}
-              onCreateFolder={onCreateFolder}
-              onCreateFile={onCreateFile}
-              menuFilePath={menuFilePath}
-              setMenuFilePath={setMenuFilePath}
-              draggedOver={draggedOver}
-              setDraggedOver={setDraggedOver}
-            />
-          ))}
+          {!isLoading ? (
+            folderContents.map((childFile) => (
+              <FileNode
+                key={childFile.path}
+                file={childFile}
+                activeFilePath={activeFilePath}
+                onFileClick={onFileClick}
+                openFolders={openFolders}
+                toggleFolder={toggleFolder}
+                onDeleteFile={onDeleteFile}
+                onRenameFile={onRenameFile}
+                onMoveFile={onMoveFile}
+                onCreateFolder={onCreateFolder}
+                onCreateFile={onCreateFile}
+                menuFilePath={menuFilePath}
+                setMenuFilePath={setMenuFilePath}
+                draggedOver={draggedOver}
+                setDraggedOver={setDraggedOver}
+              />
+            ))
+          ) : (
+            <li className="loading-item">Загрузка...</li>
+          )}
         </ul>
       )}
     </li>
