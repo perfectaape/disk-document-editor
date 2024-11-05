@@ -1,5 +1,4 @@
 .container {
-  width: 1600px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -41,8 +40,7 @@ h1 {
 
 .textarea-editor {
   white-space: pre-wrap;
-  width: 100%;
-  max-width: 600px;
+  width: 700px;
   margin: 0 !important;
   height: 400px;
   padding: 15px;

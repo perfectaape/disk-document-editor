@@ -27,14 +27,14 @@
   font-size: 18px;
   color: #666;
   text-align: center;
+  margin-left: 0 !important;
 }
 
 .editor-container {
   flex: 1;
   background-color: #fff;
-  margin-left: 350px; 
+  margin-left: 350px;
 }
-
 
 .modal {
   position: fixed;
@@ -109,7 +109,6 @@
     opacity: 1;
   }
 }
-
 
 .start-btn {
   margin-bottom: 10px;
