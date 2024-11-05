@@ -302,28 +302,12 @@ const FileNode: React.FC<FileNodeProps> = ({
     [file.path, onDeleteFile, setMenuFilePath]
   );
 
-  const handleRenameClick = useCallback(
-    (e: React.MouseEvent) => {
-      e.stopPropagation();
-      const newName = prompt("Введите новое имя файла:", file.name);
-      if (newName && newName !== file.name) {
-        const currentPath = file.path
-          .replace(/^(app:|disk):\/+/g, "")
-          .replace(/^Приложения\/Тестовое-Диск\/?/, "");
+  const handleRename = async (file: File) => {
+    if (onRenameFile) {
+      onRenameFile(file.path, file.name);
+    }
+  };
 
-        const parentPath = currentPath.substring(
-          0,
-          currentPath.lastIndexOf("/")
-        );
-
-        const newPath = parentPath ? `${parentPath}/${newName}` : newName;
-
-        onRenameFile(currentPath, newPath);
-      }
-      setMenuFilePath(null);
-    },
-    [file.path, file.name, onRenameFile, setMenuFilePath]
-  );
   const handleRefreshFolder = useCallback(async () => {
     if (file.type !== "dir") return;
 
@@ -435,7 +419,7 @@ const FileNode: React.FC<FileNodeProps> = ({
         >
           {!isRootNode && (
             <>
-              <div className="context-menu-item" onClick={handleRenameClick}>
+              <div className="context-menu-item" onClick={() => handleRename(file)}>
                 Переименовать
               </div>
               <div className="context-menu-item" onClick={handleDeleteClick}>

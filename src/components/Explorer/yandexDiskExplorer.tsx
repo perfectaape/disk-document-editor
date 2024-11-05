@@ -42,6 +42,10 @@ export const YandexDiskExplorer: React.FC<YandexDiskExplorerProps> = ({
     type: "file" | "folder";
     parentPath: string;
   } | null>(null);
+  const [showRenameModal, setShowRenameModal] = useState<{
+    path: string;
+    currentName: string;
+  } | null>(null);
 
   const cleanPath = (path: string): string => {
     if (!path || path === "/") return "app:/";
@@ -224,42 +228,44 @@ export const YandexDiskExplorer: React.FC<YandexDiskExplorerProps> = ({
     }
   };
 
-  const handleRenameFile = useCallback(
-    async (oldPath: string, newPath: string) => {
-      if (!oauthToken) return;
+  const handleRenameFile = useCallback((oldPath: string, currentName: string) => {
+    setShowRenameModal({ path: oldPath, currentName });
+  }, []);
 
+  const handleRenameConfirm = useCallback(async (newName: string) => {
+    if (!showRenameModal || !oauthToken) return;
+
+    try {
       setIsRenaming(true);
-      try {
-        const response = await yandexApi.renameFile(
-          oldPath,
-          newPath,
-          oauthToken
-        );
+      const response = await yandexApi.renameFile(
+        showRenameModal.path,
+        newName,
+        oauthToken
+      );
 
-        if (response.success) {
-          const event = new CustomEvent("clearFolderCache", {
-            detail: { path: oldPath },
-          });
-          window.dispatchEvent(event);
+      if (response.success) {
+        const event = new CustomEvent("clearFolderCache", {
+          detail: { path: showRenameModal.path },
+        });
+        window.dispatchEvent(event);
 
-          if (activeFilePath === oldPath) {
-            dispatch(setActiveFilePath(null));
-            onFileDeleted();
-            navigate("/explorer/yandex");
-          }
-
-          await new Promise((resolve) => setTimeout(resolve, 1000));
-          const updatedFiles = await yandexApi.fetchFiles(oauthToken, "app:/");
-          dispatch(setFiles([...updatedFiles]));
+        if (activeFilePath === showRenameModal.path) {
+          dispatch(setActiveFilePath(null));
+          onFileDeleted();
+          navigate("/explorer/yandex");
         }
-      } catch (error) {
-        console.error("Ошибка при переименовании файла:", error);
-      } finally {
-        setIsRenaming(false);
+
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        const updatedFiles = await yandexApi.fetchFiles(oauthToken, "app:/");
+        dispatch(setFiles([...updatedFiles]));
       }
-    },
-    [oauthToken, yandexApi, activeFilePath, dispatch, navigate, onFileDeleted]
-  );
+    } catch (error) {
+      console.error("Ошибка при переименовании файла:", error);
+    } finally {
+      setIsRenaming(false);
+      setShowRenameModal(null);
+    }
+  }, [showRenameModal, oauthToken, yandexApi, activeFilePath, dispatch, navigate, onFileDeleted]);
 
   const handleMoveFile = useCallback(
     async (sourcePath: string, destinationPath: string) => {
@@ -384,12 +390,22 @@ export const YandexDiskExplorer: React.FC<YandexDiskExplorerProps> = ({
           <div className="modal-content">
             <h2>Подтверждение удаления</h2>
             <p>Вы уверены, что хотите удалить этот файл?</p>
-            <button onClick={confirmDelete} disabled={isDeleting}>
-              {isDeleting ? "Удаление..." : "Удалить"}
-            </button>
-            <button onClick={cancelDelete} disabled={isDeleting}>
-              Отмена
-            </button>
+            <div className="modal-buttons">
+              <button 
+                onClick={confirmDelete} 
+                disabled={isDeleting}
+                className="delete-button"
+              >
+                {isDeleting ? "Удаление..." : "Удалить"}
+              </button>
+              <button 
+                onClick={cancelDelete} 
+                disabled={isDeleting}
+                className="cancel-button"
+              >
+                Отмена
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -401,6 +417,15 @@ export const YandexDiskExplorer: React.FC<YandexDiskExplorerProps> = ({
           onConfirm={handleCreateConfirm}
           onCancel={() => setShowCreateModal(null)}
           isLoading={isCreating}
+        />
+      )}
+      {showRenameModal && (
+        <InputModal
+          title="Переименовать файл"
+          defaultValue={showRenameModal.currentName}
+          onConfirm={handleRenameConfirm}
+          onCancel={() => setShowRenameModal(null)}
+          isLoading={isRenaming}
         />
       )}
     </div>

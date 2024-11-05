@@ -35,6 +35,10 @@ export const GoogleDriveExplorer: React.FC<GoogleDriveExplorerProps> = ({
     type: "file" | "folder";
     parentPath: string;
   } | null>(null);
+  const [showRenameModal, setShowRenameModal] = useState<{
+    path: string;
+    currentName: string;
+  } | null>(null);
 
   const oauthToken = getCookie("google_token");
   const navigate = useNavigate();
@@ -166,19 +170,35 @@ export const GoogleDriveExplorer: React.FC<GoogleDriveExplorerProps> = ({
     }
   }, [oauthToken, googleApi, fileToDelete, activeFilePath, onFileDeleted, refreshFiles]);
 
-  const handleRenameFile = useCallback(async (oldPath: string, newName: string) => {
-    if (!oauthToken) return;
+  const handleRenameFile = useCallback((oldPath: string, currentName: string) => {
+    setShowRenameModal({ path: oldPath, currentName });
+  }, []);
+
+  const handleRenameConfirm = useCallback(async (newName: string) => {
+    if (!showRenameModal || !oauthToken) return;
 
     try {
       setIsRenaming(true);
-      const result = await googleApi.renameFile(oldPath, newName, oauthToken);
+      const result = await googleApi.renameFile(
+        showRenameModal.path,
+        newName,
+        oauthToken
+      );
       if (result.success) {
         await refreshFiles();
+        if (showRenameModal.path === activeFilePath) {
+          setActiveFilePath(null);
+          onFileDeleted();
+          navigate('/explorer/google');
+        }
       }
+    } catch (error) {
+      console.error("Ошибка при переименовании файла:", error);
     } finally {
       setIsRenaming(false);
+      setShowRenameModal(null);
     }
-  }, [oauthToken, googleApi, refreshFiles]);
+  }, [showRenameModal, oauthToken, googleApi, refreshFiles, activeFilePath, onFileDeleted, navigate]);
 
   const handleMoveFile = useCallback(async (sourcePath: string, destinationPath: string) => {
     if (!oauthToken) return;
@@ -303,6 +323,15 @@ export const GoogleDriveExplorer: React.FC<GoogleDriveExplorerProps> = ({
           onConfirm={handleCreateConfirm}
           onCancel={() => setShowCreateModal(null)}
           isLoading={isCreating}
+        />
+      )}
+      {showRenameModal && (
+        <InputModal
+          title="Переименовать файл"
+          defaultValue={showRenameModal.currentName}
+          onConfirm={handleRenameConfirm}
+          onCancel={() => setShowRenameModal(null)}
+          isLoading={isRenaming}
         />
       )}
     </div>

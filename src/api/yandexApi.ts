@@ -386,21 +386,9 @@ export class YandexApi implements IFileAPI {
     oauthToken: string
   ): Promise<{ success: boolean }> {
     try {
-      const cleanOldPath = oldPath
-        .replace(/^(disk:|app:)\//, "")
-        .replace(/^Приложения\/Тестовое-Диск\//, "")
-        .replace(/disk:\/Приложения\/Тестовое-Диск\//g, "")
-        .replace(/^\/+/, "")
-        .trim();
-
-      const parentPath = cleanOldPath.includes("/")
-        ? cleanOldPath.substring(0, cleanOldPath.lastIndexOf("/"))
-        : "";
-
-      const currentPath = `app:/${cleanOldPath}`;
-      const newPath = parentPath
-        ? `app:/${parentPath}/${newName}`
-        : `app:/${newName}`;
+      const cleanOldPath = this.ensureAppPath(oldPath);
+      const parentPath = cleanOldPath.split('/').slice(0, -1).join('/');
+      const newPath = parentPath ? `${parentPath}/${newName}` : `app:/${newName}`;
 
       const response: AxiosResponse = await this.apiClient.post(
         "/resources/move",
@@ -410,7 +398,7 @@ export class YandexApi implements IFileAPI {
             Authorization: `OAuth ${oauthToken}`,
           },
           params: {
-            from: currentPath,
+            from: cleanOldPath,
             path: newPath,
             overwrite: false,
           },

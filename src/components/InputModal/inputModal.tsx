@@ -6,6 +6,7 @@ interface InputModalProps {
   onConfirm: (value: string) => void;
   onCancel: () => void;
   isLoading?: boolean;
+  defaultValue?: string;
 }
 
 export const InputModal: React.FC<InputModalProps> = ({
@@ -13,8 +14,9 @@ export const InputModal: React.FC<InputModalProps> = ({
   onConfirm,
   onCancel,
   isLoading = false,
+  defaultValue = '',
 }) => {
-  const [inputValue, setInputValue] = useState("");
+  const [inputValue, setInputValue] = useState(defaultValue);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
