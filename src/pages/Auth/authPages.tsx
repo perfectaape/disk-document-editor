@@ -6,26 +6,39 @@ export const AuthPage: React.FC = () => {
 
   useEffect(() => {
     const handleAuth = () => {
-      const hash = window.location.hash.substring(1);
-      const params = new URLSearchParams(hash);
-      const token = params.get("access_token");
-      const state = params.get("state");
+      try {
+        const hash = window.location.hash.substring(1);
+        const params = new URLSearchParams(hash);
+        const token = params.get("access_token");
+        const state = params.get("state");
+        const error = params.get("error");
 
-      if (token) {
-        const cookieOptions = "path=/; secure; max-age=3600";
-        if (state === "yandex") {
-          document.cookie = `yandex_token=${token}; ${cookieOptions}`;
-        } else if (state === "google") {
-          document.cookie = `google_token=${token}; ${cookieOptions}`;
-        } else {
-          console.error("Unknown state parameter:", state);
+        if (error) {
+          console.error("Authentication error:", error);
+          navigate("/");
           return;
         }
 
+        if (!token || !state) {
+          console.error("Missing token or state parameter");
+          navigate("/");
+          return;
+        }
+
+        if (state !== "yandex" && state !== "google") {
+          console.error("Unknown state parameter:", state);
+          navigate("/");
+          return;
+        }
+
+        const cookieOptions = "path=/; secure; max-age=3600";
+        document.cookie = `${state}_token=${token}; ${cookieOptions}`;
+
         navigate(`/explorer/${state}`);
         window.history.replaceState(null, "", window.location.pathname);
-      } else {
-        console.error("Access token not found in URL");
+      } catch (error) {
+        console.error("Error during authentication:", error);
+        navigate("/");
       }
     };
 

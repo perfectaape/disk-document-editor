@@ -2,7 +2,7 @@ import React from "react";
 import { Route, BrowserRouter, Routes } from "react-router-dom";
 import { AuthPage } from "./pages/Auth/authPages";
 import { MainPages } from "./pages/Main/mainPages";
-import { FileManager } from "./pages/Editor/fileManager";
+import { FileManager } from "./pages/FileManager/fileManager";
 
 const App: React.FC = () => {
   return (

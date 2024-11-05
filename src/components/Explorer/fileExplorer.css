@@ -27,7 +27,6 @@
   margin: 0;
 }
 
-/* Модальное окно */
 .modal {
   position: fixed;
   top: 0;
@@ -87,7 +86,7 @@
   cursor: not-allowed;
 }
 
-/* Заголовок */
+
 .file-explorer h1 {
   margin-top: 0;
   margin-bottom: 20px;
@@ -95,7 +94,7 @@
   color: #333;
 }
 
-/* Скрытие скроллбара */
+
 .file-explorer {
   -ms-overflow-style: none;
   scrollbar-width: none;

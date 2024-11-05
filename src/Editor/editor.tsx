@@ -1,11 +1,11 @@
 import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { YandexApi } from "../../api/yandexApi";
-import { GoogleApi } from "../../api/googleApi";
+import { YandexApi } from "../api/yandexApi";
+import { GoogleApi } from "../api/googleApi";
 import { debounce } from "lodash";
 import "./editor.css";
-import { getCookie } from "../../api/fileApi";
-import Loader from "../../components/Loader/loader";
+import { getCookie } from "../api/fileApi";
+import Loader from "../components/Loader/loader";
 import { AxiosError } from "axios";
 
 interface EditorProps {
@@ -21,17 +21,17 @@ interface FileMetadata {
   owner?: string;
 }
 
-// Добавляем функцию форматирования даты
+
 const formatDate = (dateString: string | undefined): string => {
-  if (!dateString) return '';
-  
+  if (!dateString) return "";
+
   const date = new Date(dateString);
-  return date.toLocaleString('ru-RU', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
+  return date.toLocaleString("ru-RU", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
   });
 };
 
@@ -277,7 +277,7 @@ export const Editor: React.FC<EditorProps> = React.memo(({ isFileDeleted }) => {
             <ul>
               <li>Имя файла: {fileMetadata.name}</li>
               <li>Размер: {fileMetadata.size || 0} байт</li>
-  
+
               {service === "yandex" && (
                 <li>Создан: {formatDate(fileMetadata.createdDate)}</li>
               )}

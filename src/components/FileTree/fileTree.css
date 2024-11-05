@@ -118,7 +118,6 @@
   opacity: 0.5;
 }
 
-/* Убираем скроллбар */
 .file-tree,
 .file-explorer {
   -ms-overflow-style: none;

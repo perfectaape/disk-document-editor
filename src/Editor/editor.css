@@ -1,4 +1,5 @@
 .container {
+  width: 1600px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -25,6 +26,11 @@
 
 .close-button:hover {
   background-color: #e6b800;
+}
+
+.container.editor-disabled .close-button {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 h1 {

@@ -32,10 +32,10 @@
 .editor-container {
   flex: 1;
   background-color: #fff;
-  margin-left: 350px; /* Отступ слева, чтобы не заходить под эксплорер */
+  margin-left: 350px; 
 }
 
-/* Модальное окно */
+
 .modal {
   position: fixed;
   top: 0;
@@ -99,7 +99,6 @@
   transform: none;
 }
 
-/* Анимации */
 @keyframes slide-down {
   from {
     transform: translateY(-20px);
@@ -111,7 +110,7 @@
   }
 }
 
-/* Стили для кнопок авторизации */
+
 .start-btn {
   margin-bottom: 10px;
   width: 100%;
