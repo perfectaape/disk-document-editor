@@ -14,6 +14,7 @@ interface FileTreeProps {
   onMoveFile: (sourcePath: string, destinationPath: string) => Promise<void>;
   onCreateFolder: (parentPath: string) => Promise<void>;
   onCreateFile: (parentPath: string) => Promise<void>;
+  serviceType: "google" | "yandex";
 }
 
 const FileTree: React.FC<FileTreeProps> = ({
@@ -27,6 +28,7 @@ const FileTree: React.FC<FileTreeProps> = ({
   onMoveFile,
   onCreateFolder,
   onCreateFile,
+  serviceType,
 }) => {
   const [menuFilePath, setMenuFilePath] = useState<string | null>(null);
   const [draggedOver, setDraggedOver] = useState<string | null>(null);
@@ -57,6 +59,7 @@ const FileTree: React.FC<FileTreeProps> = ({
         draggedOver={draggedOver}
         setDraggedOver={setDraggedOver}
         isRootNode={true}
+        serviceType={serviceType}
       />
     </div>
   );
@@ -78,6 +81,7 @@ interface FileNodeProps {
   draggedOver: string | null;
   setDraggedOver: (filePath: string | null) => void;
   isRootNode?: boolean;
+  serviceType: "google" | "yandex";
 }
 
 const FileNode: React.FC<FileNodeProps> = ({
@@ -96,13 +100,13 @@ const FileNode: React.FC<FileNodeProps> = ({
   draggedOver,
   setDraggedOver,
   isRootNode = false,
+  serviceType,
 }) => {
   const isOpen = openFolders.has(file.path);
   const [folderContents, setFolderContents] = useState<File[]>(
     file.children || []
   );
   const [isLoading, setIsLoading] = useState(false);
-  const isActive = activeFilePath === file.path;
   const nodeRef = useRef<HTMLLIElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -131,15 +135,20 @@ const FileNode: React.FC<FileNodeProps> = ({
 
         try {
           setIsLoading(true);
-          const yandexApi = new YandexApi();
-          const oauthToken = getCookie("yandex_token");
-          if (oauthToken) {
-            const contents = await yandexApi.fetchFolderContents(
-              oauthToken,
-              file.path
-            );
-            setFolderCache((prev) => new Map(prev).set(file.path, contents));
-            setFolderContents(contents);
+
+          if (serviceType === "yandex") {
+            const yandexApi = new YandexApi();
+            const oauthToken = getCookie("yandex_token");
+            if (oauthToken) {
+              const contents = await yandexApi.fetchFolderContents(
+                oauthToken,
+                file.path
+              );
+              setFolderCache((prev) => new Map(prev).set(file.path, contents));
+              setFolderContents(contents);
+            }
+          } else if (serviceType === "google") {
+            setFolderContents(file.children || []);
           }
         } catch (error) {
           console.error("Error loading folder contents:", error);
@@ -156,8 +165,8 @@ const FileNode: React.FC<FileNodeProps> = ({
     isOpen,
     folderCache,
     isRootNode,
-    file.name,
     file.children,
+    serviceType,
   ]);
 
   useEffect(() => {
@@ -350,11 +359,37 @@ const FileNode: React.FC<FileNodeProps> = ({
     }
   }, [file.path, file.type, isOpen, setMenuFilePath]);
 
+  const isActive = useCallback(() => {
+    if (!activeFilePath || !file.path) return false;
+
+    const cleanPath = (path: string): string => {
+      let cleaned = path
+        .replace(/^(app:|disk):\//, "")
+        .replace(/^Приложения\/Тестовое-Диск\//, "")
+        .replace(/^\/+/, "")
+        .replace(/\/$/, "")
+        .trim();
+
+      if (cleaned.startsWith("app:/")) {
+        cleaned = cleaned.substring(5);
+      }
+
+      return cleaned;
+    };
+
+    const normalizedActivePath = cleanPath(activeFilePath);
+    const normalizedFilePath = cleanPath(file.path);
+
+    return normalizedActivePath === normalizedFilePath;
+  }, [activeFilePath, file.path]);
+
+  const isActiveNode = isActive();
+
   return (
     <li
       ref={nodeRef}
       className={`file-node ${isRootNode ? "root-node" : ""} ${
-        isActive ? "active" : ""
+        isActiveNode ? "active" : ""
       } ${isDragging ? "dragging" : ""} ${
         draggedOver === file.path ? "drag-over" : ""
       }`}
@@ -368,6 +403,7 @@ const FileNode: React.FC<FileNodeProps> = ({
       data-path={file.path}
     >
       <div
+        className={isActiveNode ? "active" : ""}
         onClick={() => {
           if (file.type === "dir") {
             toggleFolder(file.path);
@@ -442,6 +478,7 @@ const FileNode: React.FC<FileNodeProps> = ({
                 setMenuFilePath={setMenuFilePath}
                 draggedOver={draggedOver}
                 setDraggedOver={setDraggedOver}
+                serviceType={serviceType}
               />
             ))
           ) : (

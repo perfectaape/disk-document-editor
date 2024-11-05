@@ -6,6 +6,7 @@ import Loader from "../../components/Loader/loader";
 import ExitBtn from "../../components/LogoutButton/exitBtn";
 import { useNavigate } from "react-router-dom";
 import "./fileExplorer.css";
+import { InputModal } from "../InputModal/inputModal";
 
 interface GoogleDriveExplorerProps {
   onFileDeleted: () => void;
@@ -29,28 +30,36 @@ export const GoogleDriveExplorer: React.FC<GoogleDriveExplorerProps> = ({
   const [isRenaming, setIsRenaming] = useState(false);
   const [isMoving, setIsMoving] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
+  const [isInitialized, setIsInitialized] = useState(false);
+  const [showCreateModal, setShowCreateModal] = useState<{
+    type: "file" | "folder";
+    parentPath: string;
+  } | null>(null);
 
   const oauthToken = getCookie("google_token");
   const navigate = useNavigate();
   const googleApi = useMemo(() => new GoogleApi(), []);
 
-  const fetchFiles = useCallback(async () => {
-    if (!oauthToken) {
-      setLoading(false);
-      return;
-    }
-
+  const refreshFiles = useCallback(async () => {
+    if (!oauthToken) return;
+    
     try {
-      const fetchedFiles = await googleApi.fetchFiles(oauthToken, "root");
-      setFiles(fetchedFiles);
+      setLoading(true);
+      const workingFolder = await googleApi.getWorkingFolderContents(oauthToken);
+      setFiles(workingFolder);
+    } catch (error) {
+      console.error("Error refreshing files:", error);
     } finally {
       setLoading(false);
     }
-  }, [googleApi, oauthToken]);
+  }, [oauthToken, googleApi]);
 
   useEffect(() => {
-    fetchFiles();
-  }, [fetchFiles]);
+    if (!isInitialized) {
+      refreshFiles();
+      setIsInitialized(true);
+    }
+  }, [isInitialized, refreshFiles]);
 
   useEffect(() => {
     localStorage.setItem(
@@ -132,153 +141,92 @@ export const GoogleDriveExplorer: React.FC<GoogleDriveExplorerProps> = ({
     [searchQuery, showOnlySupported, isSupportedFormat]
   );
 
-  const handleDeleteFile = useCallback((fileId: string) => {
-    setFileToDelete(fileId);
+  const initiateDelete = useCallback((filePath: string) => {
+    setFileToDelete(filePath);
     setShowDeleteDialog(true);
   }, []);
 
-  const handleRenameFile = useCallback(
-    async (fileId: string, newName: string) => {
-      if (!oauthToken || isRenaming) return;
-
-      setIsRenaming(true);
-      try {
-        const response = await googleApi.renameFile(
-          fileId,
-          newName,
-          oauthToken
-        );
-
-        if (response.success) {
-          const updatedFiles = await googleApi.fetchFiles(oauthToken, "root");
-          setFiles(updatedFiles);
-        }
-      } finally {
-        setIsRenaming(false);
-      }
-    },
-    [oauthToken, isRenaming, googleApi]
-  );
-
-  const handleMoveFile = useCallback(
-    async (sourceId: string, destinationId: string) => {
-      if (!oauthToken || isMoving) return;
-
-      setIsMoving(true);
-      try {
-        const response = await googleApi.moveFile(
-          sourceId,
-          destinationId,
-          oauthToken
-        );
-
-        if (response.success) {
-          const updatedFiles = await googleApi.fetchFiles(oauthToken, "root");
-          setFiles(updatedFiles);
-        }
-      } finally {
-        setIsMoving(false);
-      }
-    },
-    [oauthToken, isMoving, googleApi]
-  );
-
-  const handleCreateFolder = useCallback(
-    async (parentId: string) => {
-      if (!oauthToken) return;
-
-      const folderName = prompt("Введите имя новой папки:");
-      if (folderName) {
-        setIsCreating(true);
-        try {
-          const path = `${
-            parentId === "disk:/" ? "root" : parentId
-          }/${folderName}`;
-          const response = await googleApi.createFolder(path, oauthToken);
-          if (response.success) {
-            const updatedFiles = await googleApi.fetchFiles(oauthToken, "root");
-            setFiles(updatedFiles);
-          } else {
-            console.error("Ошибка при создании папки");
-          }
-        } catch (error) {
-          console.error("Ошибка при создании папки:", error);
-        } finally {
-          setIsCreating(false);
-        }
-      }
-    },
-    [oauthToken, googleApi]
-  );
-
-  const handleCreateFile = useCallback(
-    async (parentId: string) => {
-      if (!oauthToken) return;
-
-      const fileName = prompt("Введите имя нового файла (.txt):");
-      if (fileName && fileName.endsWith(".txt")) {
-        setIsCreating(true);
-        try {
-          const path = `${
-            parentId === "disk:/" ? "root" : parentId
-          }/${fileName}`;
-          const response = await googleApi.createFile(path, oauthToken);
-          if (response.success) {
-            const updatedFiles = await googleApi.fetchFiles(oauthToken, "root");
-            setFiles(updatedFiles);
-          } else {
-            console.error("Ошибка при создании файла");
-          }
-        } catch (error) {
-          console.error("Ошибка при создании файла:", error);
-        } finally {
-          setIsCreating(false);
-        }
-      } else {
-        alert("Имя файла должно заканчиваться на .txt");
-      }
-    },
-    [oauthToken, googleApi]
-  );
-
   const confirmDelete = useCallback(async () => {
-    if (!fileToDelete || !oauthToken) return;
+    if (!oauthToken || !fileToDelete) return;
 
-    setIsDeleting(true);
     try {
-      const folderContents = await googleApi.fetchFiles(
-        oauthToken,
-        fileToDelete
-      );
-
-      await Promise.all(
-        folderContents.map((file) =>
-          googleApi.deleteFile(file.path, oauthToken)
-        )
-      );
-
-      await googleApi.deleteFile(fileToDelete, oauthToken);
-
-      setFiles((prevFiles) =>
-        prevFiles.filter((file) => file.path !== fileToDelete)
-      );
-
-      if (activeFilePath === fileToDelete) {
-        setActiveFilePath(null);
-        onFileDeleted();
+      setIsDeleting(true);
+      const result = await googleApi.deleteFile(fileToDelete, oauthToken);
+      if (result.success) {
+        await refreshFiles();
+        if (fileToDelete === activeFilePath) {
+          setActiveFilePath(null);
+          onFileDeleted();
+        }
       }
-
-      setShowDeleteDialog(false);
-      setFileToDelete(null);
     } finally {
       setIsDeleting(false);
+      setShowDeleteDialog(false);
+      setFileToDelete(null);
     }
-  }, [fileToDelete, oauthToken, googleApi, activeFilePath, onFileDeleted]);
+  }, [oauthToken, googleApi, fileToDelete, activeFilePath, onFileDeleted, refreshFiles]);
 
-  const cancelDelete = useCallback(() => {
-    setShowDeleteDialog(false);
-    setFileToDelete(null);
+  const handleRenameFile = useCallback(async (oldPath: string, newName: string) => {
+    if (!oauthToken) return;
+
+    try {
+      setIsRenaming(true);
+      const result = await googleApi.renameFile(oldPath, newName, oauthToken);
+      if (result.success) {
+        await refreshFiles();
+      }
+    } finally {
+      setIsRenaming(false);
+    }
+  }, [oauthToken, googleApi, refreshFiles]);
+
+  const handleMoveFile = useCallback(async (sourcePath: string, destinationPath: string) => {
+    if (!oauthToken) return;
+
+    try {
+      setIsMoving(true);
+      const result = await googleApi.moveFile(sourcePath, destinationPath, oauthToken);
+      if (result.success) {
+        await refreshFiles();
+      }
+    } finally {
+      setIsMoving(false);
+    }
+  }, [oauthToken, googleApi, refreshFiles]);
+
+  const handleCreateFolder = useCallback(async (parentPath: string) => {
+    setShowCreateModal({ type: "folder", parentPath });
+    return Promise.resolve();
   }, []);
+
+  const handleCreateFile = useCallback(async (parentPath: string) => {
+    setShowCreateModal({ type: "file", parentPath });
+    return Promise.resolve();
+  }, []);
+
+  const handleCreateConfirm = useCallback(async (name: string) => {
+    if (!showCreateModal || !oauthToken) return;
+
+    try {
+      setIsCreating(true);
+      const fullPath = showCreateModal.parentPath === '/' 
+        ? `/${name}` 
+        : `${showCreateModal.parentPath}/${name}`;
+
+      const result = await (showCreateModal.type === "folder" 
+        ? googleApi.createFolder(fullPath, oauthToken)
+        : googleApi.createFile(fullPath, oauthToken));
+      
+      if (result.success) {
+        await refreshFiles();
+      }
+    } catch (error) {
+      console.error(`Ошибка при создании ${showCreateModal.type === "file" ? "файла" : "папки"}:`, error);
+    } finally {
+      setIsCreating(false);
+      setShowCreateModal(null);
+    }
+  }, [showCreateModal, oauthToken, googleApi, refreshFiles]);
 
   const filteredFiles = filterFiles(files);
 
@@ -308,12 +256,13 @@ export const GoogleDriveExplorer: React.FC<GoogleDriveExplorerProps> = ({
             Показать только поддерживаемые файлы
           </label>
           <FileTree
+            serviceType="google"
             files={filteredFiles}
             activeFilePath={activeFilePath}
             onFileClick={handleFileClick}
             openFolders={openFolders}
             toggleFolder={toggleFolder}
-            onDeleteFile={handleDeleteFile}
+            onDeleteFile={initiateDelete}
             onRenameFile={handleRenameFile}
             onMoveFile={handleMoveFile}
             onCreateFolder={handleCreateFolder}
@@ -326,14 +275,35 @@ export const GoogleDriveExplorer: React.FC<GoogleDriveExplorerProps> = ({
           <div className="modal-content">
             <h2>Подтверждение удаления</h2>
             <p>Вы уверены, что хотите удалить этот файл?</p>
-            <button onClick={confirmDelete} disabled={isDeleting}>
-              {isDeleting ? "Удаление..." : "Удалить"}
-            </button>
-            <button onClick={cancelDelete} disabled={isDeleting}>
-              Отмена
-            </button>
+            <div className="modal-buttons">
+              <button 
+                onClick={confirmDelete} 
+                disabled={isDeleting}
+                className="delete-button"
+              >
+                {isDeleting ? "Удаление..." : "Удалить"}
+              </button>
+              <button 
+                onClick={() => {
+                  setShowDeleteDialog(false);
+                  setFileToDelete(null);
+                }} 
+                disabled={isDeleting}
+                className="cancel-button"
+              >
+                Отмена
+              </button>
+            </div>
           </div>
         </div>
+      )}
+      {showCreateModal && (
+        <InputModal
+          title={`Создать ${showCreateModal.type === "file" ? "файл" : "папку"}`}
+          onConfirm={handleCreateConfirm}
+          onCancel={() => setShowCreateModal(null)}
+          isLoading={isCreating}
+        />
       )}
     </div>
   );

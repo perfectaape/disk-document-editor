@@ -1,4 +1,4 @@
-import axios, { AxiosResponse } from "axios";
+import axios from "axios";
 import { IFileAPI, File } from "./fileApi";
 
 export interface GoogleDriveResponse {
@@ -26,15 +26,6 @@ interface GoogleDriveFileList {
   files: GoogleDriveFileMetadata[];
   nextPageToken?: string;
 }
-function transformGoogleFile(file: GoogleDriveFile): File {
-  return {
-    name: file.name,
-    path: file.id,
-    mimeType: file.mimeType,
-    type:
-      file.mimeType === "application/vnd.google-apps.folder" ? "dir" : "file",
-  };
-}
 
 export class GoogleApi implements IFileAPI {
   private apiClient = axios.create({
@@ -44,12 +35,77 @@ export class GoogleApi implements IFileAPI {
     },
   });
 
-  async fetchFiles(
+  private readonly APP_FOLDER_NAME = "Text Editor Files";
+  private appFolderId: string | null = null;
+
+  async getWorkingFolderContents(oauthToken: string): Promise<File[]> {
+    try {
+      const folderId = await this.getOrCreateAppFolder(oauthToken);
+      return this.fetchFiles(oauthToken, folderId);
+    } catch (error) {
+      console.error("Error getting working folder contents:", error);
+      return [];
+    }
+  }
+
+  private async getOrCreateAppFolder(oauthToken: string): Promise<string> {
+    if (this.appFolderId) return this.appFolderId;
+
+    try {
+      const response = await this.apiClient.get<GoogleDriveResponse>("/files", {
+        headers: {
+          Authorization: `Bearer ${oauthToken}`,
+        },
+        params: {
+          q: `name='${this.APP_FOLDER_NAME}' and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+          fields: "files(id, name)",
+        },
+      });
+
+      if (response.data.files && response.data.files.length > 0) {
+        this.appFolderId = response.data.files[0].id;
+        return this.appFolderId;
+      }
+
+      const createResponse = await this.apiClient.post<{ id: string }>(
+        "/files",
+        {
+          name: this.APP_FOLDER_NAME,
+          mimeType: "application/vnd.google-apps.folder",
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${oauthToken}`,
+          },
+        }
+      );
+
+      this.appFolderId = createResponse.data.id;
+      return this.appFolderId;
+    } catch (error) {
+      console.error("Error in getOrCreateAppFolder:", error);
+      throw error;
+    }
+  }
+
+  async fetchFiles(oauthToken: string, path?: string): Promise<File[]> {
+    try {
+      if (!path) {
+        return this.getWorkingFolderContents(oauthToken);
+      }
+      return this._fetchFiles(oauthToken, path);
+    } catch (error) {
+      console.error("Error in fetchFiles:", error);
+      return [];
+    }
+  }
+
+  private async _fetchFiles(
     oauthToken: string,
-    folderId: string = "root"
+    folderId: string
   ): Promise<File[]> {
-    const response: AxiosResponse<GoogleDriveResponse> =
-      await this.apiClient.get("/files", {
+    try {
+      const response = await this.apiClient.get<GoogleDriveResponse>("/files", {
         headers: {
           Authorization: `Bearer ${oauthToken}`,
         },
@@ -59,34 +115,99 @@ export class GoogleApi implements IFileAPI {
         },
       });
 
-    if (response.data && response.data.files) {
-      const files = response.data.files.map(transformGoogleFile);
-
-      const filesWithChildren = await Promise.all(
-        files.map(async (file) => {
-          if (file.type === "dir") {
-            const children = await this.fetchFiles(oauthToken, file.path);
-            return { ...file, children };
+      const files = await Promise.all(
+        response.data.files.map(async (file) => {
+          const transformedFile = this.transformGoogleFile(file);
+          if (file.mimeType === "application/vnd.google-apps.folder") {
+            const children = await this._fetchFiles(oauthToken, file.id);
+            return {
+              ...transformedFile,
+              children,
+            };
           }
-          return file;
+          return transformedFile;
         })
       );
 
-      return filesWithChildren;
+      return files;
+    } catch (error) {
+      console.error("Error in _fetchFiles:", error);
+      return [];
     }
-    return [];
+  }
+
+  private transformGoogleFile(file: GoogleDriveFile): File {
+    return {
+      name: file.name,
+      path: file.id,
+      type:
+        file.mimeType === "application/vnd.google-apps.folder" ? "dir" : "file",
+      mimeType: file.mimeType,
+      children: [],
+    };
+  }
+
+  private async isFileInAppFolder(
+    fileId: string,
+    oauthToken: string
+  ): Promise<boolean> {
+    try {
+      const appFolderId = await this.getOrCreateAppFolder(oauthToken);
+      const response = await this.apiClient.get(`/files/${fileId}`, {
+        headers: {
+          Authorization: `Bearer ${oauthToken}`,
+        },
+        params: {
+          fields: "parents",
+        },
+      });
+
+      const checkParents = async (parents: string[]): Promise<boolean> => {
+        if (!parents || parents.length === 0) return false;
+        if (parents.includes(appFolderId)) return true;
+
+        for (const parentId of parents) {
+          const parentResponse = await this.apiClient.get(
+            `/files/${parentId}`,
+            {
+              headers: {
+                Authorization: `Bearer ${oauthToken}`,
+              },
+              params: {
+                fields: "parents",
+              },
+            }
+          );
+          if (await checkParents(parentResponse.data.parents)) return true;
+        }
+        return false;
+      };
+
+      return checkParents(response.data.parents);
+    } catch (error) {
+      console.error("Error checking file location:", error);
+      return false;
+    }
   }
 
   async deleteFile(
     fileId: string,
     oauthToken: string
   ): Promise<{ success: boolean }> {
-    await this.apiClient.delete(`/files/${fileId}`, {
-      headers: {
-        Authorization: `Bearer ${oauthToken}`,
-      },
-    });
-    return { success: true };
+    try {
+      if (!(await this.isFileInAppFolder(fileId, oauthToken))) {
+        throw new Error("File is not in app folder");
+      }
+      await this.apiClient.delete(`/files/${fileId}`, {
+        headers: {
+          Authorization: `Bearer ${oauthToken}`,
+        },
+      });
+      return { success: true };
+    } catch (error) {
+      console.error("Error in deleteFile:", error);
+      return { success: false };
+    }
   }
 
   async fetchDocumentContent(
@@ -127,13 +248,16 @@ export class GoogleApi implements IFileAPI {
       name: response.data.name,
       path: response.data.id,
       mimeType: response.data.mimeType,
-      type: response.data.mimeType === "application/vnd.google-apps.folder" ? "dir" : "file",
+      type:
+        response.data.mimeType === "application/vnd.google-apps.folder"
+          ? "dir"
+          : "file",
       size: parseInt(response.data.size || "0"),
       created: response.data.createdTime,
       modified: response.data.modifiedTime,
       owner: response.data.owners?.[0]?.displayName || "",
       createdDate: response.data.createdTime,
-      modifiedDate: response.data.modifiedTime
+      modifiedDate: response.data.modifiedTime,
     };
   }
 
@@ -232,73 +356,53 @@ export class GoogleApi implements IFileAPI {
     oauthToken: string
   ): Promise<{ success: boolean }> {
     try {
-      const sourceFile = await this.apiClient.get<GoogleDriveFileMetadata>(
-        `/files/${sourceId}`,
-        {
-          headers: {
-            Authorization: `Bearer ${oauthToken}`,
-          },
-          params: {
-            fields: "parents",
-          },
-        }
-      );
-
-      const currentParents = sourceFile.data.parents || [];
-
-      const targetParent = destinationId || "root";
-
-      if (currentParents.includes(targetParent)) {
-        return { success: true };
+      if (!(await this.isFileInAppFolder(sourceId, oauthToken))) {
+        throw new Error("Source file is not in app folder");
       }
-
-      const removeParents = currentParents.join(",");
-
+      if (!(await this.isFileInAppFolder(destinationId, oauthToken))) {
+        throw new Error("Destination folder is not in app folder");
+      }
       const response = await this.apiClient.patch(`/files/${sourceId}`, null, {
         headers: {
           Authorization: `Bearer ${oauthToken}`,
-          "Content-Type": "application/json",
         },
         params: {
-          addParents: targetParent,
-          removeParents: removeParents,
+          addParents: destinationId,
+          removeParents: "appDataFolder",
           fields: "id, parents",
         },
       });
 
       return { success: response.status === 200 };
     } catch (error) {
-      console.error("Ошибка при перемещении файла:", error);
-      if (axios.isAxiosError(error) && error.response) {
-        console.error("Response data:", error.response.data);
-      }
+      console.error("Error in moveFile:", error);
       return { success: false };
     }
   }
 
-  async createFolder(
-    path: string,
-    oauthToken: string
-  ): Promise<{ success: boolean }> {
+  async createFolder(path: string, oauthToken: string): Promise<{ success: boolean }> {
     try {
-      const [parentId, folderName] = path.split("/").reduce(
-        (acc, part, index, arr) => {
-          if (index === arr.length - 1) {
-            acc[1] = part;
-          } else {
-            acc[0] = acc[0] ? `${acc[0]}/${part}` : part;
-          }
-          return acc;
-        },
-        ["", ""]
-      );
+      const cleanPath = path.replace(/^app:\//, '').replace(/^\/+/, '');
+      const parts = cleanPath.split('/').filter(p => p);
+      const folderName = parts[parts.length - 1] || 'New Folder';
+      
+      let parentFolderId: string;
+      if (!parts.length || parts.length === 1) {
+        parentFolderId = await this.getOrCreateAppFolder(oauthToken);
+      } else {
+        parentFolderId = parts[parts.length - 2];
+        const isInAppFolder = await this.isFileInAppFolder(parentFolderId, oauthToken);
+        if (!isInAppFolder) {
+          throw new Error("Parent folder is not in app folder");
+        }
+      }
 
       const response = await this.apiClient.post(
         "/files",
         {
           name: folderName,
           mimeType: "application/vnd.google-apps.folder",
-          parents: [parentId || "root"],
+          parents: [parentFolderId],
         },
         {
           headers: {
@@ -307,58 +411,56 @@ export class GoogleApi implements IFileAPI {
         }
       );
 
-      return { success: response.status === 200 };
+      return { success: !!response.data.id };
     } catch (error) {
-      console.error("Ошибка при создании папки:", error);
+      console.error("Error in createFolder:", error);
       return { success: false };
     }
   }
 
-  async createFile(
-    path: string,
-    oauthToken: string,
-    content: string = ""
-  ): Promise<{ success: boolean }> {
+  async createFile(path: string, oauthToken: string, content: string = ""): Promise<{ success: boolean }> {
     try {
-      const [parentId, fileName] = path.split("/").reduce(
-        (acc, part, index, arr) => {
-          if (index === arr.length - 1) {
-            acc[1] = part;
-          } else {
-            acc[0] = acc[0] ? `${acc[0]}/${part}` : part;
-          }
-          return acc;
-        },
-        ["", ""]
-      );
+      const cleanPath = path.replace(/^app:\//, '').replace(/^\/+/, '');
+      const parts = cleanPath.split('/').filter(p => p);
+      const fileName = parts[parts.length - 1] || 'New File.txt';
+      
+      let parentFolderId: string;
+      if (!parts.length || parts.length === 1) {
+        parentFolderId = await this.getOrCreateAppFolder(oauthToken);
+      } else {
+        parentFolderId = parts[parts.length - 2];
+        const isInAppFolder = await this.isFileInAppFolder(parentFolderId, oauthToken);
+        if (!isInAppFolder) {
+          throw new Error("Parent folder is not in app folder");
+        }
+      }
 
       const fileMetadata = {
         name: fileName,
         mimeType: "text/plain",
-        parents: [parentId || "root"],
+        parents: [parentFolderId],
       };
 
       const createResponse = await this.apiClient.post("/files", fileMetadata, {
         headers: {
           Authorization: `Bearer ${oauthToken}`,
-          "Content-Type": "application/json",
         },
       });
 
-      const fileId = createResponse.data.id;
+      if (content) {
+        const fileId = createResponse.data.id;
+        const uploadUrl = `https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`;
+        await axios.patch(uploadUrl, content, {
+          headers: {
+            "Content-Type": "text/plain",
+            Authorization: `Bearer ${oauthToken}`,
+          },
+        });
+      }
 
-      const uploadUrl = `https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`;
-
-      await axios.patch(uploadUrl, content, {
-        headers: {
-          "Content-Type": "text/plain",
-          Authorization: `Bearer ${oauthToken}`,
-        },
-      });
-
-      return { success: true };
+      return { success: !!createResponse.data.id };
     } catch (error) {
-      console.error("Ошибка при создании файла:", error);
+      console.error("Error in createFile:", error);
       return { success: false };
     }
   }

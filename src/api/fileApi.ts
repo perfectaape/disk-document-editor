@@ -22,7 +22,7 @@ export interface IFileAPI {
     destinationPath: string,
     oauthToken: string
   ): Promise<{ success: boolean }>;
-  createFolder(path: string, oauthToken: string): Promise<{ success: boolean }>; // Добавлен метод createFolder
+  createFolder(path: string, oauthToken: string): Promise<{ success: boolean }>;
 }
 
 export interface File {

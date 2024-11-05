@@ -9,6 +9,7 @@ import Loader from "../../components/Loader/loader";
 import ExitBtn from "../../components/LogoutButton/exitBtn";
 import "./fileExplorer.css";
 import { useNavigate } from "react-router-dom";
+import { InputModal } from "../InputModal/inputModal";
 
 interface YandexDiskExplorerProps {
   onFileDeleted: () => void;
@@ -37,10 +38,14 @@ export const YandexDiskExplorer: React.FC<YandexDiskExplorerProps> = ({
   const navigate = useNavigate();
   const yandexApi = useMemo(() => new YandexApi(), []);
   const [filteredFileList, setFilteredFileList] = useState<File[]>([]);
+  const [showCreateModal, setShowCreateModal] = useState<{
+    type: "file" | "folder";
+    parentPath: string;
+  } | null>(null);
 
   const cleanPath = (path: string): string => {
     if (!path || path === "/") return "app:/";
-    
+
     const cleanPath = path
       .replace(/^.*Приложения\/Тестовое-Диск\/?/, "")
       .replace(/^\/+/, "");
@@ -140,12 +145,16 @@ export const YandexDiskExplorer: React.FC<YandexDiskExplorerProps> = ({
             file.type === "dir" ||
             isSupportedFormat(file.name, file.mime_type || "");
 
-          if (file.type === "dir" && file.children && file.children.length > 0) {
+          if (
+            file.type === "dir" &&
+            file.children &&
+            file.children.length > 0
+          ) {
             const filteredChildren = filter(file.children);
             if (filteredChildren.length > 0) {
               acc.push({
                 ...file,
-                children: filteredChildren
+                children: filteredChildren,
               });
             }
           } else if (matchesSearch && isSupported) {
@@ -286,66 +295,42 @@ export const YandexDiskExplorer: React.FC<YandexDiskExplorerProps> = ({
   );
 
   const handleCreateFolder = async (parentPath: string) => {
-    if (!oauthToken) {
-      console.error("OAuth token is missing");
-      return;
-    }
-
-    try {
-      const folderName = prompt("Введите имя новой папки:");
-      if (!folderName) return;
-
-      setIsCreating(true);
-      const basePath = cleanPath(parentPath);
-      const newFolderPath =
-        basePath === "app:/"
-          ? `app:/${folderName}`
-          : `${basePath}/${folderName}`;
-
-      const response = await yandexApi.createResource(
-        newFolderPath,
-        oauthToken,
-        "dir"
-      );
-      if (response.success) {
-        const updatedFiles = await yandexApi.fetchFiles(oauthToken, "app:/");
-        dispatch(setFiles(updatedFiles));
-      }
-    } catch (error) {
-      console.error("Ошибка при создании папки:", error);
-    } finally {
-      setIsCreating(false);
-    }
+    setShowCreateModal({ type: "folder", parentPath });
   };
 
   const handleCreateFile = async (parentPath: string) => {
-    if (!oauthToken) {
-      console.error("OAuth token is missing");
-      return;
-    }
+    setShowCreateModal({ type: "file", parentPath });
+  };
+
+  const handleCreateConfirm = async (name: string) => {
+    if (!showCreateModal || !oauthToken) return;
 
     try {
-      const fileName = prompt("Введите имя нового файла:");
-      if (!fileName) return;
-
       setIsCreating(true);
-      const basePath = cleanPath(parentPath);
-      const newFilePath =
-        basePath === "app:/" ? `app:/${fileName}` : `${basePath}/${fileName}`;
+      const basePath = cleanPath(showCreateModal.parentPath);
+      const newPath =
+        basePath === "app:/" ? `app:/${name}` : `${basePath}/${name}`;
 
       const response = await yandexApi.createResource(
-        newFilePath,
+        newPath,
         oauthToken,
-        "file"
+        showCreateModal.type === "folder" ? "dir" : "file"
       );
+
       if (response.success) {
         const updatedFiles = await yandexApi.fetchFiles(oauthToken, "app:/");
         dispatch(setFiles(updatedFiles));
       }
     } catch (error) {
-      console.error("Ошибка при создании файла:", error);
+      console.error(
+        `Ошибка при создании ${
+          showCreateModal.type === "file" ? "файла" : "папки"
+        }:`,
+        error
+      );
     } finally {
       setIsCreating(false);
+      setShowCreateModal(null);
     }
   };
 
@@ -390,6 +375,7 @@ export const YandexDiskExplorer: React.FC<YandexDiskExplorerProps> = ({
             onMoveFile={handleMoveFile}
             onCreateFolder={handleCreateFolder}
             onCreateFile={handleCreateFile}
+            serviceType="yandex"
           />
         </>
       )}
@@ -406,6 +392,16 @@ export const YandexDiskExplorer: React.FC<YandexDiskExplorerProps> = ({
             </button>
           </div>
         </div>
+      )}
+      {showCreateModal && (
+        <InputModal
+          title={`Создать ${
+            showCreateModal.type === "file" ? "файл" : "папку"
+          }`}
+          onConfirm={handleCreateConfirm}
+          onCancel={() => setShowCreateModal(null)}
+          isLoading={isCreating}
+        />
       )}
     </div>
   );
