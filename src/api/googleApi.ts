@@ -48,7 +48,7 @@ export class GoogleApi implements IFileAPI {
     }
   }
 
-  private async getOrCreateAppFolder(oauthToken: string): Promise<string> {
+  public async getOrCreateAppFolder(oauthToken: string): Promise<string> {
     if (this.appFolderId) return this.appFolderId;
 
     try {
@@ -359,16 +359,27 @@ export class GoogleApi implements IFileAPI {
       if (!(await this.isFileInAppFolder(sourceId, oauthToken))) {
         throw new Error("Source file is not in app folder");
       }
-      if (!(await this.isFileInAppFolder(destinationId, oauthToken))) {
-        throw new Error("Destination folder is not in app folder");
-      }
+
+      // Получаем текущего родителя файла
+      const fileResponse = await this.apiClient.get(`/files/${sourceId}`, {
+        headers: {
+          Authorization: `Bearer ${oauthToken}`,
+        },
+        params: {
+          fields: "parents",
+        },
+      });
+
+      const currentParents = fileResponse.data.parents?.join(',') || '';
+
+      // Перемещаем файл
       const response = await this.apiClient.patch(`/files/${sourceId}`, null, {
         headers: {
           Authorization: `Bearer ${oauthToken}`,
         },
         params: {
           addParents: destinationId,
-          removeParents: "appDataFolder",
+          removeParents: currentParents,
           fields: "id, parents",
         },
       });

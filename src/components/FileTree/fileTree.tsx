@@ -2,6 +2,7 @@ import React, { memo, useState, useRef, useEffect, useCallback } from "react";
 import { File, getCookie } from "../../api/fileApi";
 import "./fileTree.css";
 import { YandexApi } from "../../api/yandexApi";
+import { GoogleApi } from "../../api/googleApi";
 
 interface FileTreeProps {
   files: File[];
@@ -267,7 +268,12 @@ const FileNode: React.FC<FileNodeProps> = ({
 
       if (isRootNode || file.path === "app:/") {
         try {
-          await onMoveFile(sourcePath, "");
+          if (serviceType === "google") {
+            const appFolderId = await new GoogleApi().getOrCreateAppFolder(getCookie("google_token") || "");
+            await onMoveFile(sourcePath, appFolderId);
+          } else {
+            await onMoveFile(sourcePath, "");
+          }
           setDraggedOver(null);
         } catch (error) {
           console.error("Error moving file to root:", error);
@@ -290,7 +296,7 @@ const FileNode: React.FC<FileNodeProps> = ({
         console.error("Error moving file:", error);
       }
     },
-    [file, onMoveFile, setDraggedOver, isRootNode]
+    [file, onMoveFile, setDraggedOver, isRootNode, serviceType]
   );
 
   const handleDeleteClick = useCallback(
@@ -445,26 +451,30 @@ const FileNode: React.FC<FileNodeProps> = ({
       {isOpen && file.type === "dir" && (
         <ul className="file-tree">
           {!isLoading ? (
-            folderContents.map((childFile) => (
-              <FileNode
-                key={childFile.path}
-                file={childFile}
-                activeFilePath={activeFilePath}
-                onFileClick={onFileClick}
-                openFolders={openFolders}
-                toggleFolder={toggleFolder}
-                onDeleteFile={onDeleteFile}
-                onRenameFile={onRenameFile}
-                onMoveFile={onMoveFile}
-                onCreateFolder={onCreateFolder}
-                onCreateFile={onCreateFile}
-                menuFilePath={menuFilePath}
-                setMenuFilePath={setMenuFilePath}
-                draggedOver={draggedOver}
-                setDraggedOver={setDraggedOver}
-                serviceType={serviceType}
-              />
-            ))
+            folderContents.length > 0 ? (
+              folderContents.map((childFile) => (
+                <FileNode
+                  key={childFile.path}
+                  file={childFile}
+                  activeFilePath={activeFilePath}
+                  onFileClick={onFileClick}
+                  openFolders={openFolders}
+                  toggleFolder={toggleFolder}
+                  onDeleteFile={onDeleteFile}
+                  onRenameFile={onRenameFile}
+                  onMoveFile={onMoveFile}
+                  onCreateFolder={onCreateFolder}
+                  onCreateFile={onCreateFile}
+                  menuFilePath={menuFilePath}
+                  setMenuFilePath={setMenuFilePath}
+                  draggedOver={draggedOver}
+                  setDraggedOver={setDraggedOver}
+                  serviceType={serviceType}
+                />
+              ))
+            ) : (
+              <li className="empty-folder">Пусто</li>
+            )
           ) : (
             <li className="loading-item">Загрузка...</li>
           )}

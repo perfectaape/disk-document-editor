@@ -128,3 +128,8 @@
 .file-explorer::-webkit-scrollbar {
   display: none;
 }
+.empty-folder {
+  padding: 2px 16px;
+  color: #666;
+  font-style: italic;
+}
