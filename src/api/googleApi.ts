@@ -278,7 +278,7 @@ export class GoogleApi implements IFileAPI {
         }
       );
     } catch (error) {
-      console.error("Ошибка при сохранении содержимого файла:", error);
+      console.error("Ошибка при сохранении с��держимого файла:", error);
       throw error;
     }
   }
@@ -360,7 +360,6 @@ export class GoogleApi implements IFileAPI {
         throw new Error("Source file is not in app folder");
       }
 
-      // Получаем текущего родителя файла
       const fileResponse = await this.apiClient.get(`/files/${sourceId}`, {
         headers: {
           Authorization: `Bearer ${oauthToken}`,
@@ -372,7 +371,6 @@ export class GoogleApi implements IFileAPI {
 
       const currentParents = fileResponse.data.parents?.join(',') || '';
 
-      // Перемещаем файл
       const response = await this.apiClient.patch(`/files/${sourceId}`, null, {
         headers: {
           Authorization: `Bearer ${oauthToken}`,
@@ -472,6 +470,52 @@ export class GoogleApi implements IFileAPI {
       return { success: !!createResponse.data.id };
     } catch (error) {
       console.error("Error in createFile:", error);
+      return { success: false };
+    }
+  }
+
+  async uploadFile(
+    oauthToken: string,
+    parentPath: string,
+    file: globalThis.File
+  ): Promise<{ success: boolean }> {
+    try {
+      let parentFolderId: string;
+      if (parentPath === "app:/") {
+        parentFolderId = await this.getOrCreateAppFolder(oauthToken);
+      } else {
+        parentFolderId = parentPath;
+        const isInAppFolder = await this.isFileInAppFolder(parentFolderId, oauthToken);
+        if (!isInAppFolder) {
+          throw new Error("Parent folder is not in app folder");
+        }
+      }
+
+      const fileMetadata = {
+        name: file.name,
+        mimeType: "text/plain",
+        parents: [parentFolderId],
+      };
+
+      const createResponse = await this.apiClient.post("/files", fileMetadata, {
+        headers: {
+          Authorization: `Bearer ${oauthToken}`,
+        },
+      });
+
+      const fileId = createResponse.data.id;
+
+      const uploadUrl = `https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`;
+      await axios.patch(uploadUrl, file, {
+        headers: {
+          "Content-Type": "text/plain",
+          Authorization: `Bearer ${oauthToken}`,
+        },
+      });
+
+      return { success: true };
+    } catch (error) {
+      console.error("Error in uploadFile:", error);
       return { success: false };
     }
   }

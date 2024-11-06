@@ -58,3 +58,19 @@
   background-color: #6c757d;
   color: white;
 }
+
+.file-upload-container {
+  width: 100%;
+  margin-bottom: 20px;
+}
+
+.file-upload-container input[type="file"] {
+  width: 100%;
+  margin-bottom: 10px;
+}
+
+.selected-file-name {
+  margin-top: 10px;
+  word-break: break-all;
+  color: #666;
+}

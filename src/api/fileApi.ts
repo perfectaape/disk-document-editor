@@ -23,6 +23,11 @@ export interface IFileAPI {
     oauthToken: string
   ): Promise<{ success: boolean }>;
   createFolder(path: string, oauthToken: string): Promise<{ success: boolean }>;
+  uploadFile: (
+    oauthToken: string, 
+    parentPath: string, 
+    file: globalThis.File
+  ) => Promise<{ success: boolean }>;
 }
 
 export interface File {

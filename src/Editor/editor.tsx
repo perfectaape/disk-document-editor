@@ -21,7 +21,6 @@ interface FileMetadata {
   owner?: string;
 }
 
-
 const formatDate = (dateString: string | undefined): string => {
   if (!dateString) return "";
 
@@ -49,6 +48,7 @@ export const Editor: React.FC<EditorProps> = React.memo(({ isFileDeleted }) => {
   const yandexApi = useMemo(() => new YandexApi(), []);
   const googleApi = useMemo(() => new GoogleApi(), []);
   const [isContentLoading, setIsContentLoading] = useState<boolean>(true);
+  const [isEditorDisabled, setIsEditorDisabled] = useState<boolean>(false);
 
   const checkToken = useCallback(() => {
     const yandexToken = getCookie("yandex_token");
@@ -61,7 +61,7 @@ export const Editor: React.FC<EditorProps> = React.memo(({ isFileDeleted }) => {
   }, [navigate, service]);
 
   const isSupportedFormat = useCallback(
-    (mimeType: string, fileName: string) => {
+    (mimeType: string) => {
       const supportedMimeTypes = [
         "text/plain",
         "text/plain; charset=utf-8",
@@ -70,13 +70,15 @@ export const Editor: React.FC<EditorProps> = React.memo(({ isFileDeleted }) => {
       ];
 
       if (service === "google") {
-        return supportedMimeTypes.includes(mimeType.toLowerCase());
+        const isGoogleFormat = mimeType.includes('application/vnd.google-apps') ||
+                              mimeType.includes('application/vnd.openxmlformats') ||
+                              mimeType.includes('application/msword') ||
+                              mimeType.includes('application/pdf');
+        
+        return supportedMimeTypes.includes(mimeType.toLowerCase()) && !isGoogleFormat;
       }
 
-      return (
-        supportedMimeTypes.includes(mimeType.toLowerCase()) &&
-        fileName.toLowerCase().endsWith(".txt")
-      );
+      return supportedMimeTypes.includes(mimeType.toLowerCase());
     },
     [service]
   );
@@ -93,7 +95,7 @@ export const Editor: React.FC<EditorProps> = React.memo(({ isFileDeleted }) => {
         const mimeType =
           service === "yandex" ? fileMetadata.mime_type : fileMetadata.mimeType;
 
-        if (!isSupportedFormat(mimeType || "", fileName)) {
+        if (!isSupportedFormat(mimeType || "")) {
           setUnsupportedFormat(true);
           return;
         }
@@ -146,10 +148,29 @@ export const Editor: React.FC<EditorProps> = React.memo(({ isFileDeleted }) => {
     }
   }, [navigate, filePath, checkToken, handleFetchDocumentContent]);
 
+  const handleClose = useCallback(() => {
+    navigate(`/explorer/${service}`);
+  }, [navigate, service]);
+
+  useEffect(() => {
+    const handleAppFolderDeleted = () => {
+      setContent("");
+      setIsEditorDisabled(true);
+      setFileMetadata(null);
+      handleClose();
+    };
+
+    window.addEventListener("appFolderDeleted", handleAppFolderDeleted);
+
+    return () => {
+      window.removeEventListener("appFolderDeleted", handleAppFolderDeleted);
+    };
+  }, [handleClose]);
+
   const handleSaveDocument = useCallback(
     async (text: string) => {
       const token = checkToken();
-      if (!token || isFileDeleted) return;
+      if (!token || isFileDeleted || isEditorDisabled) return;
 
       setSaving(true);
       try {
@@ -169,7 +190,15 @@ export const Editor: React.FC<EditorProps> = React.memo(({ isFileDeleted }) => {
         setSaving(false);
       }
     },
-    [filePath, checkToken, service, yandexApi, googleApi, isFileDeleted]
+    [
+      filePath,
+      checkToken,
+      service,
+      yandexApi,
+      googleApi,
+      isFileDeleted,
+      isEditorDisabled,
+    ]
   );
 
   const debouncedSaveDocument = useMemo(
@@ -185,10 +214,6 @@ export const Editor: React.FC<EditorProps> = React.memo(({ isFileDeleted }) => {
     },
     [debouncedSaveDocument]
   );
-
-  const handleClose = useCallback(() => {
-    navigate(`/explorer/${service}`);
-  }, [navigate, service]);
 
   const updateFileMetadata = useCallback(async () => {
     const token = checkToken();
@@ -238,7 +263,11 @@ export const Editor: React.FC<EditorProps> = React.memo(({ isFileDeleted }) => {
   }
 
   return (
-    <div className={`container ${isFileDeleted ? "editor-disabled" : ""}`}>
+    <div
+      className={`container ${
+        isFileDeleted || isEditorDisabled ? "editor-disabled" : ""
+      }`}
+    >
       <button onClick={handleClose} className="close-button">
         Закрыть
       </button>
@@ -249,14 +278,14 @@ export const Editor: React.FC<EditorProps> = React.memo(({ isFileDeleted }) => {
         onChange={handleChange}
         rows={10}
         cols={50}
-        disabled={isFileDeleted}
+        disabled={isFileDeleted || isEditorDisabled}
         placeholder="Начните вводить текст..."
       />
       <div className="editor-buttons">
         <button
           className="start-btn"
           onClick={() => handleSaveDocument(content)}
-          disabled={isFileDeleted}
+          disabled={isFileDeleted || isEditorDisabled}
         >
           Сохранить
         </button>
@@ -264,6 +293,7 @@ export const Editor: React.FC<EditorProps> = React.memo(({ isFileDeleted }) => {
           onClick={toggleModal}
           style={{ marginLeft: "20px" }}
           className="start-btn"
+          disabled={isEditorDisabled}
         >
           Инфо
         </button>

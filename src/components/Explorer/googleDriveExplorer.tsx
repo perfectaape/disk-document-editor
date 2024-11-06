@@ -39,6 +39,7 @@ export const GoogleDriveExplorer: React.FC<GoogleDriveExplorerProps> = ({
     path: string;
     currentName: string;
   } | null>(null);
+  const [isUploading, setIsUploading] = useState<boolean>(false);
 
   const oauthToken = getCookie("google_token");
   const navigate = useNavigate();
@@ -248,11 +249,30 @@ export const GoogleDriveExplorer: React.FC<GoogleDriveExplorerProps> = ({
     }
   }, [showCreateModal, oauthToken, googleApi, refreshFiles]);
 
+  const handleUploadFile = useCallback(async (parentPath: string, file: globalThis.File) => {
+    if (!oauthToken) return;
+
+    try {
+      setIsUploading(true);
+      const result = await googleApi.uploadFile(oauthToken, parentPath, file);
+      
+      if (result.success) {
+        // Ждем немного, чтобы файл успел появиться на сервере
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        await refreshFiles();
+      }
+    } catch (error) {
+      console.error("Error uploading file:", error);
+    } finally {
+      setIsUploading(false);
+    }
+  }, [oauthToken, googleApi, refreshFiles]);
+
   const filteredFiles = filterFiles(files);
 
   return (
     <div className="file-explorer">
-      {loading || isRenaming || isMoving || isCreating ? (
+      {loading || isRenaming || isMoving || isCreating || isUploading ? (
         <Loader />
       ) : (
         <>
@@ -287,6 +307,7 @@ export const GoogleDriveExplorer: React.FC<GoogleDriveExplorerProps> = ({
             onMoveFile={handleMoveFile}
             onCreateFolder={handleCreateFolder}
             onCreateFile={handleCreateFile}
+            onUploadFile={handleUploadFile}
           />
         </>
       )}

@@ -476,4 +476,41 @@ export class YandexApi implements IFileAPI {
       throw error;
     }
   }
+
+  async uploadFile(
+    oauthToken: string, 
+    parentPath: string, 
+    file: globalThis.File
+  ): Promise<{ success: boolean }> {
+    try {
+      const cleanPath = this.ensureAppPath(parentPath);
+      const uploadPath = cleanPath === "app:/" 
+        ? `app:/${file.name}` 
+        : `${cleanPath}/${file.name}`;
+
+      const uploadUrlResponse = await this.apiClient.get(
+        "/resources/upload",
+        {
+          headers: {
+            Authorization: `OAuth ${oauthToken}`,
+          },
+          params: {
+            path: uploadPath,
+            overwrite: true,
+          },
+        }
+      );
+
+      await axios.put(uploadUrlResponse.data.href, file, {
+        headers: {
+          "Content-Type": "text/plain",
+        },
+      });
+
+      return { success: true };
+    } catch (error) {
+      console.error("Error uploading file:", error);
+      return { success: false };
+    }
+  }
 }

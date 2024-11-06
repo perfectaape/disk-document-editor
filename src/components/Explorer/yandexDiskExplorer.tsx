@@ -4,7 +4,7 @@ import { RootState } from "../../store/store";
 import { setFiles, setActiveFilePath } from "../../store/fileActions";
 import { YandexApi } from "../../api/yandexApi";
 import FileTree from "../FileTree/fileTree";
-import { File, getCookie } from "../../api/fileApi";
+import { File as CustomFile, getCookie } from "../../api/fileApi";
 import Loader from "../../components/Loader/loader";
 import ExitBtn from "../../components/LogoutButton/exitBtn";
 import "./fileExplorer.css";
@@ -37,7 +37,7 @@ export const YandexDiskExplorer: React.FC<YandexDiskExplorerProps> = ({
   const oauthToken = getCookie("yandex_token");
   const navigate = useNavigate();
   const yandexApi = useMemo(() => new YandexApi(), []);
-  const [filteredFileList, setFilteredFileList] = useState<File[]>([]);
+  const [filteredFileList, setFilteredFileList] = useState<CustomFile[]>([]);
   const [showCreateModal, setShowCreateModal] = useState<{
     type: "file" | "folder";
     parentPath: string;
@@ -46,6 +46,7 @@ export const YandexDiskExplorer: React.FC<YandexDiskExplorerProps> = ({
     path: string;
     currentName: string;
   } | null>(null);
+  const [isUploading, setIsUploading] = useState<boolean>(false);
 
   const cleanPath = (path: string): string => {
     if (!path || path === "/") return "app:/";
@@ -134,9 +135,9 @@ export const YandexDiskExplorer: React.FC<YandexDiskExplorerProps> = ({
   );
 
   const filterFiles = useCallback(
-    (files: File[]): File[] => {
-      const filter = (items: File[]): File[] => {
-        return items.reduce((acc: File[], file) => {
+    (files: CustomFile[]): CustomFile[] => {
+      const filter = (items: CustomFile[]): CustomFile[] => {
+        return items.reduce((acc: CustomFile[], file) => {
           const normalizedSearchQuery = searchQuery.trim().toLowerCase();
           const normalizedFileName = file.name.trim().toLowerCase();
 
@@ -345,9 +346,28 @@ export const YandexDiskExplorer: React.FC<YandexDiskExplorerProps> = ({
     setFileToDelete(null);
   };
 
+  const handleUploadFile = useCallback(async (parentPath: string, file: globalThis.File) => {
+    if (!oauthToken) return;
+
+    try {
+      setIsUploading(true);
+      const result = await yandexApi.uploadFile(oauthToken, parentPath, file);
+      
+      if (result.success) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        const updatedFiles = await yandexApi.fetchFiles(oauthToken, "app:/");
+        dispatch(setFiles(updatedFiles));
+      }
+    } catch (error) {
+      console.error("Error uploading file:", error);
+    } finally {
+      setIsUploading(false);
+    }
+  }, [oauthToken, yandexApi, dispatch]);
+
   return (
     <div className="file-explorer">
-      {loading || isRenaming || isCreating || isDeleting ? (
+      {loading || isRenaming || isCreating || isDeleting || isUploading ? (
         <Loader />
       ) : (
         <>
@@ -381,6 +401,7 @@ export const YandexDiskExplorer: React.FC<YandexDiskExplorerProps> = ({
             onMoveFile={handleMoveFile}
             onCreateFolder={handleCreateFolder}
             onCreateFile={handleCreateFile}
+            onUploadFile={handleUploadFile}
             serviceType="yandex"
           />
         </>

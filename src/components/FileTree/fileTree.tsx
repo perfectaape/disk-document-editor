@@ -1,11 +1,11 @@
 import React, { memo, useState, useRef, useEffect, useCallback } from "react";
-import { File, getCookie } from "../../api/fileApi";
+import { File as CustomFile, getCookie } from "../../api/fileApi";
 import "./fileTree.css";
 import { YandexApi } from "../../api/yandexApi";
 import { GoogleApi } from "../../api/googleApi";
 
 interface FileTreeProps {
-  files: File[];
+  files: CustomFile[];
   activeFilePath: string | null;
   onFileClick: (filePath: string) => void;
   openFolders: Set<string>;
@@ -16,6 +16,7 @@ interface FileTreeProps {
   onCreateFolder: (parentPath: string) => Promise<void>;
   onCreateFile: (parentPath: string) => Promise<void>;
   serviceType: "google" | "yandex";
+  onUploadFile: (parentPath: string, file: globalThis.File) => Promise<void>;
 }
 
 const FileTree: React.FC<FileTreeProps> = ({
@@ -30,11 +31,12 @@ const FileTree: React.FC<FileTreeProps> = ({
   onCreateFolder,
   onCreateFile,
   serviceType,
+  onUploadFile,
 }) => {
   const [menuFilePath, setMenuFilePath] = useState<string | null>(null);
   const [draggedOver, setDraggedOver] = useState<string | null>(null);
 
-  const rootFile: File = {
+  const rootFile: CustomFile = {
     name: "Ваш диск",
     path: "app:/",
     type: "dir",
@@ -61,13 +63,14 @@ const FileTree: React.FC<FileTreeProps> = ({
         setDraggedOver={setDraggedOver}
         isRootNode={true}
         serviceType={serviceType}
+        onUploadFile={onUploadFile}
       />
     </div>
   );
 };
 
 interface FileNodeProps {
-  file: File;
+  file: CustomFile;
   activeFilePath: string | null;
   onFileClick: (filePath: string) => void;
   openFolders: Set<string>;
@@ -83,6 +86,7 @@ interface FileNodeProps {
   setDraggedOver: (filePath: string | null) => void;
   isRootNode?: boolean;
   serviceType: "google" | "yandex";
+  onUploadFile: (parentPath: string, file: globalThis.File) => Promise<void>;
 }
 
 const FileNode: React.FC<FileNodeProps> = ({
@@ -102,18 +106,21 @@ const FileNode: React.FC<FileNodeProps> = ({
   setDraggedOver,
   isRootNode = false,
   serviceType,
+  onUploadFile,
 }) => {
   const isOpen = openFolders.has(file.path);
-  const [folderContents, setFolderContents] = useState<File[]>(
+  const [folderContents, setFolderContents] = useState<CustomFile[]>(
     file.children || []
   );
   const [isLoading, setIsLoading] = useState(false);
   const nodeRef = useRef<HTMLLIElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
-  const [folderCache, setFolderCache] = useState<Map<string, File[]>>(
+  const [folderCache, setFolderCache] = useState<Map<string, CustomFile[]>>(
     new Map()
   );
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (isRootNode) {
@@ -308,7 +315,7 @@ const FileNode: React.FC<FileNodeProps> = ({
     [file.path, onDeleteFile, setMenuFilePath]
   );
 
-  const handleRename = async (file: File) => {
+  const handleRename = async (file: CustomFile) => {
     if (onRenameFile) {
       onRenameFile(file.path, file.name);
     }
@@ -374,6 +381,22 @@ const FileNode: React.FC<FileNodeProps> = ({
   }, [activeFilePath, file.path]);
 
   const isActiveNode = isActive();
+
+  const handleUploadClick = useCallback(() => {
+    setShowUploadModal(true);
+  }, []);
+
+  const handleFileSelect = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFile = event.target.files?.[0];
+    if (!selectedFile) return;
+
+    try {
+      await onUploadFile(file.path, selectedFile);
+      setShowUploadModal(false);
+    } catch (error) {
+      console.error("Error uploading file:", error);
+    }
+  }, [file.path, onUploadFile]);
 
   return (
     <li
@@ -444,8 +467,56 @@ const FileNode: React.FC<FileNodeProps> = ({
               <div className="context-menu-item" onClick={handleCreateFile}>
                 Создать файл
               </div>
+              <div className="context-menu-item" onClick={handleUploadClick}>
+                Загрузить файл
+              </div>
             </>
           )}
+        </div>
+      )}
+      {showUploadModal && (
+        <div className="modal">
+          <div className="modal-content">
+            <h2>Загрузить файл</h2>
+            <div className="file-upload-container">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".txt"
+                onChange={handleFileSelect}
+              />
+              {fileInputRef.current?.files?.[0] && (
+                <div className="selected-file-name">
+                  Выбран файл: {fileInputRef.current.files[0].name}
+                </div>
+              )}
+            </div>
+            <div className="modal-buttons">
+              <button 
+                onClick={async () => {
+                  const selectedFile = fileInputRef.current?.files?.[0];
+                  if (selectedFile) {
+                    try {
+                      await onUploadFile(file.path, selectedFile);
+                      setShowUploadModal(false);
+                    } catch (error) {
+                      console.error("Error uploading file:", error);
+                    }
+                  }
+                }}
+                disabled={!fileInputRef.current?.files?.[0]}
+                className="submit-button"
+              >
+                Загрузить
+              </button>
+              <button 
+                onClick={() => setShowUploadModal(false)}
+                className="cancel-button"
+              >
+                Отмена
+              </button>
+            </div>
+          </div>
         </div>
       )}
       {isOpen && file.type === "dir" && (
@@ -470,6 +541,7 @@ const FileNode: React.FC<FileNodeProps> = ({
                   draggedOver={draggedOver}
                   setDraggedOver={setDraggedOver}
                   serviceType={serviceType}
+                  onUploadFile={onUploadFile}
                 />
               ))
             ) : (
